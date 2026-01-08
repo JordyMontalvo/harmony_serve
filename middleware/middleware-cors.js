@@ -7,8 +7,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   
   // Producción - Vercel
-  'https://sifrah.vercel.app',
-  'https://sifrah-admin.vercel.app',
+  'https://harmonyy-x5sr.vercel.app',
+  'https://harmony-admin-alpha.vercel.app',
   'https://sifrah-admin-git-main-saywite.vercel.app',
   
   // Heroku - Se configuran automáticamente
