@@ -1,14 +1,7 @@
-const Cors = require("cors");
+const { corsMiddleware } = require("../middleware/middleware-cors");
 
 class Lib {
   constructor() {
-    this.cors = Cors({
-      origin: true, // Allow all origins
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-    });
-
     this.midd = this.midd.bind(this);
   }
 
@@ -24,7 +17,7 @@ class Lib {
 
   midd(req, res) {
     return new Promise((resolve, reject) => {
-      this.cors(req, res, (result) => {
+      corsMiddleware(req, res, (result) => {
         if (result instanceof Error) return reject(result);
         return resolve(result);
       });
