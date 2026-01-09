@@ -1,4 +1,4 @@
-import db from "../../../components/db";
+import db from "../../../components/db-optimized";
 import lib from "../../../components/lib";
 
 const { User, Session, Plan, Product, Affiliation, Office, Tree, Transaction, Period } =
@@ -91,52 +91,76 @@ export default async (req, res) => {
   session = await Session.findOne({ value: session });
   if (!session) return res.json(error("invalid session"));
 
-  // get USER
-  const user = await User.findOne({ id: session.id });
+  // get USER, PLANS, PRODUCTS, AFFILIATION, y TRANSACTIONS en paralelo
+  const [
+    user,
+    plans,
+    products,
+    affiliation,
+    affiliations,
+    transactions,
+    _transactions
+  ] = await Promise.all([
+    User.findOne({ id: session.id }).catch(err => {
+      console.error('[Affiliation API] Error loading user:', err);
+      return null;
+    }),
+    Plan.find({}).catch(err => {
+      console.error('[Affiliation API] Error loading plans:', err);
+      return [];
+    }),
+    Product.find({}).catch(err => {
+      console.error('[Affiliation API] Error loading products:', err);
+      return [];
+    }),
+    Affiliation.findOneLast({
+      userId: session.id,
+      status: { $in: ["pending", "approved"] },
+    }).catch(err => {
+      console.error('[Affiliation API] Error loading affiliation:', err);
+      return null;
+    }),
+    Affiliation.find({
+      userId: session.id,
+      status: "approved",
+    }).catch(err => {
+      console.error('[Affiliation API] Error loading affiliations:', err);
+      return [];
+    }),
+    Transaction.find({
+      user_id: session.id,
+      virtual: { $in: [null, false] },
+    }).catch(err => {
+      console.error('[Affiliation API] Error loading transactions:', err);
+      return [];
+    }),
+    Transaction.find({
+      user_id: session.id,
+      virtual: true,
+    }).catch(err => {
+      console.error('[Affiliation API] Error loading virtual transactions:', err);
+      return [];
+    })
+  ]);
 
-  // get PLANS
-  let plans = await Plan.find({});
-
-  // get PRODUCTS
-  const products = await Product.find({});
-
-  // get last AFFILIATION pending or approved
-  const affiliation = await Affiliation.findOneLast({
-    userId: user.id,
-    status: { $in: ["pending", "approved"] },
-  });
-  const affiliations = await Affiliation.find({
-    userId: user.id,
-    status: "approved",
-  });
-
-  if (affiliation && affiliation.status == "approved") {
-    // if(affiliation.plan.id == 'early') {
-    //  plans.shift()
-    // }
-    if (affiliation.plan.id == "basic") {
-      plans.shift();
-      //  plans.shift()
-    }
-    if (affiliation.plan.id == "standard") {
-      plans.shift();
-      plans.shift();
-      // plans.shift()
-    }
-    if (affiliation.plan.id == "master") {
-      plans = [];
-    }
+  // Validar que user no sea null antes de continuar
+  if (!user) {
+    return res.json(error("User not found"));
   }
 
-  // get transactions
-  const transactions = await Transaction.find({
-    user_id: user.id,
-    virtual: { $in: [null, false] },
-  });
-  const _transactions = await Transaction.find({
-    user_id: user.id,
-    virtual: true,
-  });
+  // Filtrar planes según afiliación existente
+  let filteredPlans = plans;
+  if (affiliation && affiliation.status == "approved") {
+    if (affiliation.plan.id == "basic") {
+      filteredPlans = plans.filter((_, index) => index > 0);
+    }
+    if (affiliation.plan.id == "standard") {
+      filteredPlans = plans.filter((_, index) => index > 1);
+    }
+    if (affiliation.plan.id == "master") {
+      filteredPlans = [];
+    }
+  }
 
   const ins = acum(transactions, { type: "in" }, "value");
   const outs = acum(transactions, { type: "out" }, "value");
@@ -147,7 +171,12 @@ export default async (req, res) => {
   const _balance = _ins - _outs;
 
   if (req.method == "GET") {
-    const offices = await Office.find({ active: { $ne: false } }); // Usuarios solo ven oficinas activas
+    // Obtener oficinas en paralelo con las otras consultas
+    const offices = await Office.find({ active: { $ne: false } }).catch(err => {
+      console.error('[Affiliation API] Error loading offices:', err);
+      return [];
+    });
+    
     console.log("[Affiliation API] Oficinas cargadas:", offices.map(o => ({ 
       id: o.id, 
       name: o.name, 
@@ -173,7 +202,7 @@ export default async (req, res) => {
         dni: user.dni,
         token: user.token,
 
-        plans,
+        filteredPlans,
         products,
         affiliation,
         affiliations,
