@@ -1,4 +1,4 @@
-import db from "../../../components/db-optimized";
+import db from "../../../components/db";
 import lib from "../../../components/lib";
 
 const { User, Session, Plan, Product, Affiliation, Office, Tree, Transaction, Period } =
