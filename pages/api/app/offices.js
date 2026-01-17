@@ -27,12 +27,19 @@ export default async (req, res) => {
     }
 
     offices = offices.map(office => {
-      office.products = office.products.map(p => {
-        const product = products.find(e => e.id == p.id)
-        p.name = product.name
-
-        return p
-      })
+      office.products = office.products
+        .map(p => {
+          const product = products.find(e => e.id == p.id)
+          
+          // Si el producto no existe, retornar null para filtrarlo después
+          if (!product) {
+            return null
+          }
+          
+          p.name = product.name
+          return p
+        })
+        .filter(p => p !== null) // Filtrar productos que no existen
 
       office.recharges = recharges.filter(r => r.office_id == office.id)
 
@@ -41,7 +48,10 @@ export default async (req, res) => {
 
     console.log("🔍 [DEBUG] Oficinas para usuarios (checkout):", offices.map(o => ({ id: o.id, name: o.name, active: o.active })));
 
-    return res.json(success({ offices }))
+    // Filtrar oficinas null o undefined
+    const filteredOffices = (offices || []).filter(o => o !== null && o !== undefined);
+
+    return res.json(success({ offices: filteredOffices }))
   }
 
   // Los usuarios no pueden hacer POST/DELETE/PATCH a oficinas
