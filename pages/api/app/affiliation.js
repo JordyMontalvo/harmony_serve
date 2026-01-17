@@ -177,17 +177,9 @@ export default async (req, res) => {
       return [];
     });
     
-    console.log("[Affiliation API] Oficinas cargadas:", offices.map(o => ({ 
-      id: o.id, 
-      name: o.name, 
-      address: o.address,
-      horario: o.horario,
-      dias: o.dias,
-      accounts: o.accounts 
-    })));
-    console.log("[API App Affiliation] Estructura completa del primer producto:", products.length > 0 ? products[0] : "No hay productos");
-    console.log("[API App Affiliation] Campos disponibles en productos:", products.length > 0 ? Object.keys(products[0]) : "No hay productos");
-
+    const filteredProducts = (products || []).filter(p => p !== null && p !== undefined);
+    const filteredOffices = (offices || []).filter(o => o !== null && o !== undefined);
+    
     return res.json(
       success({
         name: user.name,
@@ -203,10 +195,10 @@ export default async (req, res) => {
         token: user.token,
 
         filteredPlans,
-        products,
+        products: filteredProducts,
         affiliation,
         affiliations,
-        offices,
+        offices: filteredOffices,
 
         balance,
         _balance,
