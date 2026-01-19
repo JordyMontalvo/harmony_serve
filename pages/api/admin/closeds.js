@@ -8,89 +8,66 @@ const { Tree, Transaction, Closed } = db
 
 let tree
 
+// ============================================================================
+// NUEVOS RANGOS HARMONY LIFE CORPORATION (10 RANGOS)
+// ============================================================================
+
 const Pay = {
-  'star':                 15,
-  'master':               30,
-  'silver':               45,
-  'gold':                100,
-  'sapphire':            200,
-  'RUBI':                300,
-  'DIAMANTE':           5000,
-  'DOBLE DIAMANTE':    10000,
-  'TRIPLE DIAMANTE':   15000,
-  'DIAMANTE ESTRELLA': 25000,
+  'MILLONARIO':          0,    // Rango 1
+  'ORO':                 0,    // Rango 2
+  'ESMERALDA':           0,    // Rango 3
+  'PLATINO':             0,    // Rango 4
+  'DIAMANTE':            0,    // Rango 5
+  'DIAMANTE_AZUL':       0,    // Rango 6
+  'DIAMANTE_EJECUTIVO':  0,    // Rango 7
+  'DOBLE_DIAMANTE':      0,    // Rango 8
+  'DIAMANTE_CORONA':     0,    // Rango 9
+  'TOP_HARMONY':         0,    // Rango 10 (máximo)
 }
 
 const pays = [
-  {
-    'name' : 'star',
-    'payed':  false,
-  },
-  {
-    'name' : 'master',
-    'payed':  false,
-  },
-  {
-    'name' : 'silver',
-    'payed':  false,
-  },
-  {
-    'name' : 'gold',
-    'payed':  false,
-  },
-  {
-    'name' : 'sapphire',
-    'payed':  false,
-  },
-  {
-    'name' : 'RUBI',
-    'payed':  false,
-  },
-  {
-    'name' : 'DIAMANTE',
-    'payed':  false,
-  },
-  {
-    'name' : 'DOBLE DIAMANTE',
-    'payed':  false,
-  },
-  {
-    'name' : 'TRIPLE DIAMANTE',
-    'payed':  false,
-  },
-  {
-    'name' : 'DIAMANTE ESTRELLA',
-    'payed':  false,
-  },
+  { 'name': 'MILLONARIO', 'payed': false },
+  { 'name': 'ORO', 'payed': false },
+  { 'name': 'ESMERALDA', 'payed': false },
+  { 'name': 'PLATINO', 'payed': false },
+  { 'name': 'DIAMANTE', 'payed': false },
+  { 'name': 'DIAMANTE_AZUL', 'payed': false },
+  { 'name': 'DIAMANTE_EJECUTIVO', 'payed': false },
+  { 'name': 'DOBLE_DIAMANTE', 'payed': false },
+  { 'name': 'DIAMANTE_CORONA', 'payed': false },
+  { 'name': 'TOP_HARMONY', 'payed': false },
 ]
 
+// Porcentajes por rango (para bonos residuales si se usan)
+// Estos son los mismos porcentajes que en affiliations.js
 let r = {
-  'active':   [0.03, 0.01, 0.01                                                                          ],
-  'star':     [0.05, 0.06, 0.08, 0.03, 0.005, 0.005                                                      ],
-  'master':   [0.05, 0.06, 0.10, 0.07, 0.03,  0.01,  0.01, 0.005, 0.005                                  ],
-  'silver':   [0.05, 0.06, 0.12, 0.10, 0.03,  0.01,  0.01, 0.01,  0.01, 0.005, 0.005                     ],
-  'gold':     [0.05, 0.07, 0.13, 0.10, 0.03,  0.015, 0.01, 0.01,  0.01, 0.005, 0.005, 0.005, 0.005       ],
-  'sapphire':          [0.06, 0.07, 0.13, 0.11, 0.04,  0.015, 0.01, 0.01,  0.01, 0.005, 0.005, 0.005, 0.005, 0.005],
-  'RUBI':              [0.06, 0.07, 0.14, 0.11, 0.04,  0.015, 0.01, 0.01,  0.01,  0.01, 0.005, 0.005, 0.005, 0.005, 0.005],
-  'DIAMANTE':          [0.07, 0.07, 0.14, 0.12, 0.05,  0.015, 0.01, 0.01,  0.01,  0.01, 0.005, 0.005, 0.005, 0.005, 0.005],
-  'DOBLE DIAMANTE':    [0.07, 0.08, 0.15, 0.13, 0.05,  0.020, 0.02, 0.01,  0.01,  0.01, 0.005, 0.005, 0.005, 0.005, 0.005],
-  'TRIPLE DIAMANTE':   [0.08, 0.10, 0.15, 0.13, 0.05,  0.020, 0.02, 0.01,  0.01,  0.01, 0.005, 0.005, 0.005, 0.005, 0.005],
-  'DIAMANTE ESTRELLA': [0.08, 0.10, 0.16, 0.13, 0.05,  0.020, 0.02, 0.01,  0.01,  0.01, 0.005, 0.005, 0.005, 0.005, 0.005],
+  'active':             [0.73, 0.05, 0.10, 0.04, 0.02],  // 5 niveles base
+  'MILLONARIO':         [0.73, 0.05, 0.10, 0.04, 0.02],  // 5 niveles
+  'ORO':                [0.73, 0.05, 0.10, 0.04, 0.02],  // 5 niveles
+  'ESMERALDA':          [0.73, 0.05, 0.10, 0.04, 0.02, 0.02],  // 6 niveles
+  'PLATINO':            [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02],  // 7 niveles
+  'DIAMANTE':           [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02, 0.02],  // 8 niveles
+  'DIAMANTE_AZUL':      [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02, 0.02, 0.02],  // 9 niveles
+  'DIAMANTE_EJECUTIVO': [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02, 0.02, 0.02, 0.01],  // 10 niveles
+  'DOBLE_DIAMANTE':     [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01],  // 11 niveles
+  'DIAMANTE_CORONA':    [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01],  // 12 niveles
+  'TOP_HARMONY':        [0.73, 0.05, 0.10, 0.04, 0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01],  // 13 niveles
 }
 
+// Posiciones de rangos (para comparaciones)
 const pos = {
-  'none':             -1,
-  'active':            0,
-  'star':              1,
-  'master':            2,
-  'silver':            3,
-  'gold':              4,
-  'sapphire':          5,
-  'RUBI':              6,
-  'DIAMANTE':          7,
-  'DOBLE DIAMANTE':    8,
-  'TRIPLE DIAMANTE':   9,
-  'DIAMANTE ESTRELLA': 10,
+  'none':               -1,
+  'active':              0,
+  'MILLONARIO':          1,
+  'ORO':                 2,
+  'ESMERALDA':           3,
+  'PLATINO':             4,
+  'DIAMANTE':            5,
+  'DIAMANTE_AZUL':       6,
+  'DIAMANTE_EJECUTIVO':  7,
+  'DOBLE_DIAMANTE':      8,
+  'DIAMANTE_CORONA':     9,
+  'TOP_HARMONY':        10,
 }
 
 const bonuses = {

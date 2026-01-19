@@ -241,6 +241,48 @@ export default async (req, res) => {
       );
       await lib.updateTotalPointsCascade(User, Tree, user.id);
 
+      // ============================================================================
+      // REGLA ESPECIAL: Activar Distribuidor (basic) si compra 4 productos
+      // ============================================================================
+      if (user.plan === 'basic' && !user.activated) {
+        // Contar total de productos comprados en TODAS las activaciones aprobadas
+        const allApprovedActivations = await Activation.find({
+          userId: user.id,
+          status: 'approved'
+        });
+        
+        // Contar total de productos
+        let totalProducts = 0;
+        for (const act of allApprovedActivations) {
+          if (act.products && Array.isArray(act.products)) {
+            for (const product of act.products) {
+              if (product && typeof product.total === 'number') {
+                totalProducts += product.total;
+              }
+            }
+          }
+        }
+        
+        console.log(`📦 Distribuidor ${user.name}: Total productos comprados: ${totalProducts}`);
+        
+        // Si tiene 4 o más productos, ACTIVAR
+        if (totalProducts >= 4) {
+          console.log(`✅ ACTIVANDO Distribuidor ${user.name} - Alcanzó ${totalProducts} productos`);
+          await User.update(
+            { id: user.id },
+            {
+              activated: true,
+              _activated: true,
+            }
+          );
+          
+          // Actualizar la variable local para la migración de saldo
+          activated = true;
+          _activated = true;
+        }
+      }
+      // ============================================================================
+
       // Migrar saldo solo cuando el usuario se activa por primera vez (cambia de false a true)
       // Esto ocurre cuando el usuario alcanza 120 puntos por primera vez
       const isFirstTimeActivation = !wasActivatedBefore && activated;

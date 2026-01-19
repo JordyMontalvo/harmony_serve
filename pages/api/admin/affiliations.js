@@ -29,82 +29,125 @@ const U = ["name", "lastName", "dni", "phone"];
 let users = null;
 let tree = null;
 
-// Definición de pagos fijos por plan y nivel. Cada array tiene 9 valores (uno por cada nivel de profundidad).
+// ============================================================================
+// NUEVA LÓGICA HARMONY LIFE CORPORATION
+// Sistema de pagos por PORCENTAJES sobre PUNTOS (no sobre soles)
+// Todos los paquetes pagan 5 niveles básicos
+// ============================================================================
 
-const pay = {
-  basic: [90, 20, 5, 3, 3, 1.5, 1.5, 1.5, 1.5], // Solo absorbe 3 niveles
-  standard: [300, 50, 20, 10, 10, 5, 5, 5, 5], // Solo absorbe 6 niveles
-  master: [500, 100, 60, 40, 20, 10, 10, 10, 10], // Absorbe los 9 niveles
-};
+// Tabla de porcentajes para los primeros 5 niveles
+// Estos porcentajes se aplican sobre los PUNTOS del afiliado
+const PERCENTAGE_TABLE_5_LEVELS = [
+  0.73,  // Nivel 1: 73%
+  0.05,  // Nivel 2: 5%
+  0.10,  // Nivel 3: 10%
+  0.04,  // Nivel 4: 4%
+  0.02   // Nivel 5: 2%
+];
 
-// Define cuántos niveles puede absorber cada plan
-const absorb_levels = {
-  basic: 3, // Solo recibe pagos de los primeros 3 niveles
-  standard: 6, // Solo recibe pagos de los primeros 6 niveles
-  master: 9, // Recibe pagos de los 9 niveles
-};
+// REGLA ESPECIAL: Distribuidor paga fijo S/ 50 en nivel 1 solamente
+const DISTRIBUTOR_FIXED_PAYMENT = 50;
 
 let pays = [];
 
-// Función para repartir bonos de afiliación hasta 9 niveles hacia arriba,
-async function pay_bonus(
-  id,
-  i,
-  aff_id,
-  amount,
-  migration,
-  plan_afiliado,
-  _id,
-  previousPlan = null
+/**
+ * Nueva función de pago de bonos por PORCENTAJES sobre PUNTOS
+ * 
+ * @param {string} userId - ID del usuario que recibirá el bono
+ * @param {number} level - Nivel actual (0-4 para niveles 1-5)
+ * @param {string} affiliationId - ID de la afiliación que genera el bono
+ * @param {number} affiliatedPoints - PUNTOS del afiliado (no soles)
+ * @param {string} affiliatedPlan - Plan del afiliado (basic, standard, master, vip)
+ * @param {string} affiliatedUserId - ID del usuario afiliado
+ * @param {boolean} migration - Si es migración o afiliación
+ */
+async function pay_bonus_percentage(
+  userId,
+  level,
+  affiliationId,
+  affiliatedPoints,
+  affiliatedPlan,
+  affiliatedUserId,
+  migration = false
 ) {
-  const user = users.find((e) => e.id == id);
-  const node = tree.find((e) => e.id == id);
+  // Límite: Solo 5 niveles básicos
+  if (level >= 5) return;
+
+  const user = users.find((e) => e.id === userId);
+  const node = tree.find((e) => e.id === userId);
 
   // Si el usuario no existe, termina la recursión
-  if (!user) return;
+  if (!user || !node) return;
 
-  const virtual = user._activated || user.activated ? false : true;
+  // Verificar si el usuario está activo
+  const isActive = user._activated || user.activated;
+  const virtual = !isActive;
   const name = migration ? "migration bonus" : "affiliation bonus";
 
-  // Si es upgrade (previousPlan existe), pagar solo la diferencia por nivel
-  let fixed_payment;
-  if (previousPlan) {
-    const nuevo = pay[plan_afiliado][i] || 0;
-    const anterior = pay[previousPlan][i] || 0;
-    fixed_payment = nuevo - anterior;
-  } else {
-    fixed_payment = pay[plan_afiliado][i];
+  // REGLA ESPECIAL: Distribuidor solo paga nivel 1 con monto fijo
+  if (affiliatedPlan === 'basic' && level >= 1) {
+    // Distribuidor solo paga nivel 0 (nivel 1), continuar hacia arriba sin pagar
+    if (node.parent) {
+      await pay_bonus_percentage(
+        node.parent,
+        level + 1,
+        affiliationId,
+        affiliatedPoints,
+        affiliatedPlan,
+        affiliatedUserId,
+        migration
+      );
+    }
+    return;
   }
 
-  // Solo paga si el usuario puede absorber este nivel según su plan y la diferencia es positiva
-  if (i < absorb_levels[user.plan] && fixed_payment && fixed_payment > 0) {
-    const transactionId = rand();
-    await Transaction.insert({
-      id: transactionId,
-      date: new Date(),
-      user_id: user.id,
-      type: "in",
-      value: fixed_payment, // Pago fijo o diferencia
-      name,
-      affiliation_id: aff_id,
-      virtual,
-      _user_id: _id,
-    });
-    pays.push(transactionId);
+  // Calcular el pago
+  let payment = 0;
+
+  if (isActive) {
+    // CASO ESPECIAL: Distribuidor recibe pago fijo en nivel 1
+    if (affiliatedPlan === 'basic' && level === 0) {
+      payment = DISTRIBUTOR_FIXED_PAYMENT; // S/ 50 fijo
+    } else {
+      // Caso normal: Porcentaje sobre puntos
+      const percentage = PERCENTAGE_TABLE_5_LEVELS[level];
+      payment = affiliatedPoints * percentage;
+    }
+
+    // Solo insertar transacción si hay pago
+    if (payment > 0) {
+      const transactionId = rand();
+      await Transaction.insert({
+        id: transactionId,
+        date: new Date(),
+        user_id: user.id,
+        type: "in",
+        value: payment,
+        name,
+        affiliation_id: affiliationId,
+        virtual,
+        _user_id: affiliatedUserId,
+        // Campos adicionales para tracking
+        level: level + 1, // Guardar nivel (1-5)
+        percentage: affiliatedPlan === 'basic' && level === 0 ? null : PERCENTAGE_TABLE_5_LEVELS[level],
+        points_base: affiliatedPoints
+      });
+      pays.push(transactionId);
+    }
   }
 
-  // Siempre reparte hasta 9 niveles hacia arriba (i = 0 a 8)
-  if (i == 8 || !node.parent) return;
-  await pay_bonus(
-    node.parent,
-    i + 1,
-    aff_id,
-    amount,
-    migration,
-    plan_afiliado,
-    _id,
-    previousPlan
-  );
+  // Continuar hacia arriba (siempre, hasta 5 niveles)
+  if (node.parent) {
+    await pay_bonus_percentage(
+      node.parent,
+      level + 1,
+      affiliationId,
+      affiliatedPoints,
+      affiliatedPlan,
+      affiliatedUserId,
+      migration
+    );
+  }
 }
 
 const handler = async (req, res) => {
@@ -226,158 +269,19 @@ const handler = async (req, res) => {
       // update USER
       const user = await User.findOne({ id: affiliation.userId });
 
-      // Si es upgrade, solo actualizar lo necesario
-      if (affiliation.type === "upgrade") {
-        // Actualizar plan y puntos (sumar solo la diferencia)
-        const currentAffiliationPoints = user.affiliation_points || 0;
-        const newAffiliationPoints = currentAffiliationPoints + (affiliation.difference?.points || 0);
-        
-        await User.update(
-          { id: user.id },
-          {
-            plan: affiliation.plan.id,
-            n: affiliation.plan.n,
-            affiliation_points: newAffiliationPoints,
-            affiliation_date: new Date(),
-            _activated: true,
-            activated:true
-          }
-        );
-        // CRÍTICO: Actualizar total_points después del upgrade
-        await lib.updateTotalPointsCascade(User, Tree, user.id);
-        // PAGAR BONOS SOLO SOBRE LA DIFERENCIA
-        tree = await Tree.find({});
-        users = await User.find({});
-        pays = [];
-        const plan = affiliation.plan.id;
-        const previousPlan = affiliation.previousPlan?.id; // <-- Tomar solo el id del plan anterior
-        const amount = affiliation.difference?.amount || 0;
-        // Solo repartir bonos si hay diferencia positiva
-        if (amount > 0) {
-          await pay_bonus(
-            user.parentId,
-            0,
-            affiliation.id,
-            amount,
-            false,
-            plan,
-            user.id,
-            previousPlan // <-- Pasar el plan anterior
-          );
-        }
-        // Actualizar la afiliación con las transacciones
-        await Affiliation.update({ id }, { transactions: pays });
-        // UPDATE STOCK SOLO DE PRODUCTOS ADICIONALES
-        const office_id = affiliation.office;
-        const diffProducts = affiliation.difference?.products || [];
-        const office = await Office.findOne({ id: office_id });
-        diffProducts.forEach((p, i) => {
-          if (office.products[i]) office.products[i].total -= p.total;
-        });
-        await Office.update(
-          { id: office_id },
-          {
-            products: office.products,
-          }
-        );
-        // migrar transacciones virtuales solo las que fueron creadas después del último cierre
-        // y que NO sean transacciones "closed reset" (compensaciones de cierre)
-        // y que NO sean transacciones que ya fueron compensadas por "closed reset"
-        // Primero obtener la fecha del último cierre
-        const lastClosed = await Closed.findOne({}, { sort: { date: -1 } });
-        
-        // Obtener todas las transacciones "closed reset" del usuario, ordenadas por fecha
-        const closedResetTransactions = await Transaction.find({
-          user_id: user.id,
-          name: "closed reset",
-          virtual: true
-        });
-        
-        // Ordenar los "closed reset" por fecha (más antiguos primero)
-        closedResetTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-        
-        // Obtener TODAS las transacciones virtuales del usuario (excepto "closed reset")
-        // para procesarlas en orden cronológico
-        const allVirtualTransactions = await Transaction.find({
-          user_id: user.id,
-          virtual: true,
-          name: { $ne: "closed reset" }
-        }).sort({ date: 1 }); // Ordenar por fecha (más antiguas primero)
-        
-        // Identificar qué transacciones fueron compensadas por cada "closed reset"
-        // IMPORTANTE: Una transacción solo puede ser compensada UNA VEZ
-        const compensatedTransactionIds = new Set(); // Usar Set para evitar duplicados
-        
-        // Para cada "closed reset", identificar las transacciones que compensó
-        for (const resetTransaction of closedResetTransactions) {
-          // Obtener todas las transacciones virtuales que existían ANTES o EN la fecha del reset
-          // y que NO hayan sido compensadas previamente
-          const transactionsAvailableForReset = allVirtualTransactions.filter(t => {
-            // Solo considerar transacciones que existían antes o en la fecha del reset
-            const transactionDate = new Date(t.date);
-            const resetDate = new Date(resetTransaction.date);
-            return transactionDate <= resetDate && !compensatedTransactionIds.has(t.id);
-          });
-          
-          // Simular la compensación: sumar transacciones hasta alcanzar el valor del reset
-          let remainingToCompensate = Math.abs(resetTransaction.value); // Valor absoluto porque es negativo
-          const transactionsToCompensate = [];
-          
-          for (const transaction of transactionsAvailableForReset) {
-            if (remainingToCompensate <= 0) break;
-            
-            // Solo considerar transacciones de tipo "in" (entradas)
-            if (transaction.type === 'in') {
-              if (transaction.value <= remainingToCompensate) {
-                // Esta transacción fue completamente compensada
-                transactionsToCompensate.push(transaction.id);
-                remainingToCompensate -= transaction.value;
-              } else {
-                // Esta transacción fue parcialmente compensada
-                // Por ahora, la consideramos compensada completamente
-                // En el futuro se podría manejar compensaciones parciales
-                transactionsToCompensate.push(transaction.id);
-                remainingToCompensate = 0;
-                break;
-              }
-            }
-          }
-          
-          // Agregar los IDs de las transacciones que fueron compensadas por este reset
-          transactionsToCompensate.forEach(id => compensatedTransactionIds.add(id));
-        }
-        
-        let virtualTransactionsQuery = {
-          user_id: user.id,
-          virtual: true,
-          name: { $ne: "closed reset" } // Excluir transacciones de compensación de cierre
-        };
-        
-        // Si hay un cierre anterior, solo migrar transacciones creadas después de ese cierre
-        if (lastClosed) {
-          virtualTransactionsQuery.date = { $gte: lastClosed.date };
-        }
-        
-        const transactions = await Transaction.find(virtualTransactionsQuery);
-        
-        // Filtrar transacciones que NO fueron compensadas por "closed reset"
-        const validTransactions = transactions.filter(transaction => {
-          // Si esta transacción está en la lista de compensadas, no migrarla
-          return !compensatedTransactionIds.has(transaction.id);
-        });
-        
-        for (let transaction of validTransactions) {
-          await Transaction.update({ id: transaction.id }, { virtual: false });
-        }
-        return res.json(success());
-      }
+      // NUEVA LÓGICA: NO hay upgrades, siempre es afiliación completa
+      // Actualizar usuario con el plan completo
+      
+      // REGLA ESPECIAL: Distribuidor (basic) inactivo al registrarse
+      const isDistributor = affiliation.plan.id === 'basic';
+      const shouldActivate = !isDistributor; // Todos activos EXCEPTO Distribuidor
 
       await User.update(
         { id: user.id },
         {
           affiliated: true,
-          _activated: true,
-          activated: true,
+          _activated: shouldActivate,  // Distribuidor: false, Otros: true
+          activated: shouldActivate,   // Distribuidor: false, Otros: true
           affiliation_date: new Date(),
           plan: affiliation.plan.id,
           n: affiliation.plan.n,
@@ -415,35 +319,25 @@ const handler = async (req, res) => {
         );
       }
 
-      // PAY AFFILIATION BONUS
+      // PAY AFFILIATION BONUS - NUEVA LÓGICA
       tree = await Tree.find({});
       users = await User.find({});
       pays = [];
 
       const plan = affiliation.plan.id;
-      const amount = affiliation.plan.amount - 50;
+      const affiliationPoints = affiliation.plan.affiliation_points; // PUNTOS, no monto
+      const isMigration = user.plan !== "default"; // Si ya tenía un plan, es migración
 
-      if (user.plan == "default") {
-        await pay_bonus(
-          user.parentId,
-          0,
-          affiliation.id,
-          amount,
-          false,
-          plan,
-          user.id
-        );
-      } else {
-        await pay_bonus(
-          user.parentId,
-          0,
-          affiliation.id,
-          amount,
-          true,
-          plan,
-          user.id
-        );
-      }
+      // Llamar a la nueva función con PUNTOS
+      await pay_bonus_percentage(
+        user.parentId,
+        0, // Empezar en nivel 0 (nivel 1)
+        affiliation.id,
+        affiliationPoints, // PUNTOS del afiliado
+        plan,
+        user.id,
+        isMigration
+      );
 
       // Actualizar la afiliación con las transacciones
       await Affiliation.update({ id }, { transactions: pays }); // Aquí se agregan las IDs de las transacciones
