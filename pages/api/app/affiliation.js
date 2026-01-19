@@ -148,16 +148,26 @@ export default async (req, res) => {
     return res.json(error("User not found"));
   }
 
-  // Filtrar planes según afiliación existente
+  // Filtrar planes según afiliación existente (Mostrar solo planes superiores)
   let filteredPlans = plans;
-  if (affiliation && affiliation.status == "approved") {
-    if (affiliation.plan.id == "basic") {
+  if (affiliation && (affiliation.status == "approved" || user.plan)) {
+    // Identificar el plan actual (usar el de la afiliación o el del usuario)
+    const currentPlanId = affiliation.plan ? affiliation.plan.id : user.plan;
+
+    if (currentPlanId == "basic") { // Distribuidor
+      // Mostrar solo Empresario, Master, VIP (índices > 0)
       filteredPlans = plans.filter((_, index) => index > 0);
     }
-    if (affiliation.plan.id == "standard") {
+    else if (currentPlanId == "standard" || currentPlanId == "business") { // Empresario
+      // Mostrar solo Master, VIP (índices > 1)
       filteredPlans = plans.filter((_, index) => index > 1);
     }
-    if (affiliation.plan.id == "master") {
+    else if (currentPlanId == "master") { // Master
+      // Mostrar solo VIP (índices > 2, asumiendo que master es el 3ro)
+      filteredPlans = plans.filter((_, index) => index > 2);
+    }
+    else if (currentPlanId == "vip") { // VIP
+      // Si ya es VIP (máximo), no mostrar planes de upgrade de afiliación
       filteredPlans = [];
     }
   }
@@ -230,87 +240,97 @@ export default async (req, res) => {
     const officeDoc = await Office.findOne({ id: officeId, active: { $ne: false } })
     if (!officeDoc) return res.json(error("La Oficina de Recojo (PDE) seleccionada no es válida."))
 
-    // Buscar el plan seleccionado
-    plan = plans.find((e) => e.id == plan.id);
-    console.log({ plan });
+    // Buscar el plan seleccionado en la base de datos
+    const selectedPlan = plans.find((e) => e.id == plan.id);
+    
+    if (!selectedPlan) {
+      console.error('❌ Plan no encontrado:', plan.id);
+      return res.json(error("Plan no encontrado"));
+    }
+    
+    if (!selectedPlan.amount) {
+      console.error('❌ Plan sin campo amount:', selectedPlan);
+      return res.json(error("Plan inválido - sin precio"));
+    }
+    
+    // Usar el plan de la base de datos (tiene todos los campos)
+    plan = selectedPlan;
+    console.log('✅ Plan encontrado:', { id: plan.id, name: plan.name, amount: plan.amount });
 
     let transactions = [];
     let amounts;
-    let type = "affiliation";
-    let previousPlan = null;
-    let difference = null;
+    
+    // NUEVA LÓGICA: NO hay upgrades, siempre es afiliación completa
+    const type = "affiliation";
 
-    // Detectar si es upgrade
-    // Buscar la afiliación aprobada de mayor plan (más alto ya pagado)
-    let highestAffiliation = null;
-    if (affiliations && affiliations.length > 0) {
-      highestAffiliation = affiliations.reduce((prev, curr) => {
-        // Compara por monto del plan
-        return curr.plan.amount > prev.plan.amount ? curr : prev;
-      }, affiliations[0]);
-    }
-    if (
-      highestAffiliation &&
-      plan &&
-      plan.amount > highestAffiliation.plan.amount
-    ) {
-      type = "upgrade";
-      previousPlan = highestAffiliation.plan;
-      // Calcular diferencia
-      difference = {
-        amount: plan.amount - highestAffiliation.plan.amount,
-        points:
-          (plan.affiliation_points || 0) -
-          (highestAffiliation.plan.affiliation_points || 0),
-        products: products.map((p, i) => ({
-          ...p,
-          total: p.total - (highestAffiliation.products[i]?.total || 0),
-        })),
-      };
-      // Para upgrades, solo registrar la diferencia de productos
-      products = difference.products;
+    // Siempre cobrar el precio completo del plan
+    const price = plan.amount;
+    
+    // Inicializar montos a 0
+    let amountVirtual = 0;   // Saldo virtual (_balance)
+    let amountAvailable = 0; // Saldo disponible (balance)
+    let amountToPay = price; // Monto a pagar en efectivo/voucher
+
+    // Si el usuario eligió usar saldo (check == true)
+    if (check) {
+      // 1. Prioridad: Usar Saldo Virtual (_balance)
+      // Usar todo lo que haya en _balance hasta cubrir el precio
+      amountVirtual = _balance < price ? _balance : price;
+      
+      // Calcular remanente después de usar virtual
+      let remainder = price - amountVirtual;
+      
+      // 2. Prioridad: Usar Saldo Disponible (balance) solo si falta cubrir precio
+      if (remainder > 0) {
+        amountAvailable = balance < remainder ? balance : remainder;
+      }
+      
+      // 3. Lo que quede se paga externo
+      amountToPay = price - amountVirtual - amountAvailable;
     }
 
-    if (!check) {
-      // Si es upgrade, solo cobrar la diferencia
-      const price = type === "upgrade" ? difference.amount : plan.amount;
+    console.log('💰 Desglose de Pago:', {
+      precioTotal: price,
+      usarSaldo: check,
+      saldoVirtualDisp: _balance,
+      saldoRealDisp: balance,
+      separator: '---',
+      pagoConVirtual: amountVirtual,
+      pagoConSaldo: amountAvailable,
+      pagoConVoucher: amountToPay
+    });
 
-      const a = _balance < price ? _balance : price;
-      const r = price - _balance > 0 ? price - _balance : 0;
-      const b = balance < r ? balance : r;
-      const c = price - a - b;
-      console.log({ a, b, c });
+    // Guardar los montos calculados
+    amounts = [amountVirtual, amountAvailable, amountToPay];
 
-      const id1 = rand();
-      const id2 = rand();
+    const id1 = rand();
+    const id2 = rand();
 
-      amounts = [a, b, c];
+    // Generar transacciones de descuento de saldo
+    if (amountVirtual > 0) {
+      transactions.push(id1);
+      await Transaction.insert({
+        id: id1,
+        date: new Date(),
+        user_id: user.id,
+        type: "out",
+        value: amountVirtual, // Usar la variable correcta
+        name: type,
+        virtual: true,
+      });
+    }
 
-      if (a) {
-        transactions.push(id1);
-        await Transaction.insert({
-          id: id1,
-          date: new Date(),
-          user_id: user.id,
-          type: "out",
-          value: a,
-          name: type,
-          virtual: true,
-        });
-      }
-
-      if (b) {
-        transactions.push(id2);
-        await Transaction.insert({
-          id: id2,
-          date: new Date(),
-          user_id: user.id,
-          type: "out",
-          value: b,
-          name: type,
-          virtual: false,
-        });
-      }
+    if (amountAvailable > 0) {
+      transactions.push(id2);
+      await Transaction.insert({
+        id: id2,
+        date: new Date(),
+        user_id: user.id,
+        type: "out",
+        value: amountAvailable, // Usar la variable correcta
+        name: type,
+        virtual: false, // Saldo real no es virtual
+      });
     }
 
     const period = await getOrCreateOpenPeriod(new Date());
@@ -334,8 +354,6 @@ export default async (req, res) => {
       voucher_date: date,
       voucher_number,
       type,
-      previousPlan,
-      difference,
     });
 
     return res.json(success());

@@ -102,7 +102,7 @@ function calc_range(arr, p) {
   if(n >= 4 && arr.reduce((a, b, c) => a + (b > (c == 0 ? 0.2768 : 0.25)   * 9000  ? (c == 0 ? 0.2768 : 0.25)   * 9000  : b), 0) >= 9000)  return 'sapphire'
   if(n >= 3 && arr.reduce((a, b, c) => a + (b > (c == 0 ? 0.3637 : 0.3334) * 3300  ? (c == 0 ? 0.3637 : 0.3334) * 3300  : b), 0) >= 3300)  return 'gold'
   if(n >= 3 && arr.reduce((a, b, c) => a + (b > (c == 0 ? 0.4167 : 0.3334) * 1800  ? (c == 0 ? 0.4167 : 0.3334) * 1800  : b), 0) >= 1800)  return 'silver'
-  if(n >= 2 && arr.reduce((a, b, c) => a + (b > (c == 0 ? 0.5556 : 0.50)   * 900   ? (c == 0 ? 0.5556 : 0.50)   * 900   : b), 0) >= 900 )  return 'master'
+  if(n >= 2 && arr.reduce((a, b, c) => a + (b > (c == 0 ? 0.5556 : 0.50)   * 900   ? (c == 0 ? 0.5556 : 0.50)   * 900   : b), 0) >= 900 )  return 'vip'
   if(n >= 2 && arr.reduce((a, b, c) => a + (b > (c == 0 ? 0.6667 : 0.50)   * 300   ? (c == 0 ? 0.6667 : 0.50)   * 300   : b), 0) >= 300 )  return 'star'
 
   return 'active'
@@ -131,6 +131,7 @@ function levels() {
     if(node.rank == 'sapphire')   node.levels = 14
     if(node.rank == 'gold')   node.levels = 13
     if(node.rank == 'silver') node.levels = 11
+    if(node.rank == 'vip') node.levels = 9
     if(node.rank == 'master') node.levels = 9
     if(node.rank == 'star')   node.levels = 6
     if(node.rank == 'active') node.levels = 3
@@ -300,11 +301,13 @@ export default async (req, res) => {
 
       for(let node of tree) {
 
-        let directs = tree.filter(e => e.affiliation_points && e.parenId == node.id && (e.plan == 'business' || e.plan == 'master'))
+        let directs = tree.filter(e => e.affiliation_points && e.parenId == node.id && (e.plan == 'business' || e.plan == 'master' || e.plan == 'vip'))
 
         directs.sort((a, b) => {
           if(a.plan == b.plan) return  0
 
+          if(a.plan == 'vip') return -1
+          if(b.plan == 'vip') return 1
           if(a.plan == 'master' && b.plan == 'business') return -1
 
           return 1
@@ -312,7 +315,7 @@ export default async (req, res) => {
 
         if(directs.length >= 5) {
 
-          const value = (directs[4].plan == 'master') ? 250 : 100
+          const value = (directs[4].plan == 'vip' || directs[4].plan == 'master') ? 250 : 100
 
           await Transaction.insert({
             date:    new Date(),
