@@ -194,10 +194,10 @@ export default async (req, res) => {
       success({
         name: user.name,
         lastName: user.lastName,
-        affiliated: user.affiliated,
+        affiliated: user.affiliated || (affiliation && affiliation.status === 'approved'),
         _activated: user._activated,
         activated: user.activated,
-        plan: user.plan,
+        plan: user.plan || (affiliation && affiliation.status === 'approved' && affiliation.plan ? affiliation.plan.id : null),
         country: user.country,
         photo: user.photo,
         tree: user.tree,
