@@ -362,7 +362,8 @@ const handler = async (req, res) => {
       // migrar transacciones virtuales solo las que fueron creadas después del último cierre
       // y que NO sean transacciones "closed reset" (compensaciones de cierre)
       // y que NO sean transacciones que ya fueron compensadas por "closed reset"
-      const lastClosed = await Closed.findOne({}, { sort: { date: -1 } });
+      const allClosings = await Closed.find({});
+      const lastClosed = allClosings.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
       
       // Obtener todas las transacciones "closed reset" del usuario, ordenadas por fecha
       const closedResetTransactions = await Transaction.find({
@@ -376,11 +377,14 @@ const handler = async (req, res) => {
       
       // Obtener TODAS las transacciones virtuales del usuario (excepto "closed reset")
       // para procesarlas en orden cronológico
-      const allVirtualTransactions = await Transaction.find({
+      let allVirtualTransactions = await Transaction.find({
         user_id: user.id,
         virtual: true,
         name: { $ne: "closed reset" }
-      }).sort({ date: 1 }); // Ordenar por fecha (más antiguas primero)
+      });
+      
+      // Ordenar por fecha (más antiguas primero)
+      allVirtualTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
       
       // Identificar qué transacciones fueron compensadas por cada "closed reset"
       // IMPORTANTE: Una transacción solo puede ser compensada UNA VEZ
