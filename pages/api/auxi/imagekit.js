@@ -9,7 +9,7 @@ console.log('imagekit !!! ....................................')
 var imagekit = new ImageKit({
   publicKey,
   privateKey,
-  urlEndpoint: "https://ik.imagekit.io/ur69moyfky/",
+  urlEndpoint: "https://ik.imagekit.io/ur69moyfky",
 })
 
 module.exports = cors((req, res) => {
