@@ -25,6 +25,7 @@ export default async (req, res) => {
         account: method.cuenta,
         holder: method.titular,
         type: method.tipo,
+        cci: method.cci || "",
         active: method.active
       }))
       
