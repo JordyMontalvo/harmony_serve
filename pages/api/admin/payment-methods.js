@@ -48,6 +48,7 @@ export default async (req, res) => {
         titular: paymentMethod.titular,
         banco: paymentMethod.banco,
         tipo: paymentMethod.tipo,
+        cci: paymentMethod.cci || "",
         active: paymentMethod.active !== undefined ? paymentMethod.active : true,
         createdAt: new Date(),
         updatedAt: new Date()
