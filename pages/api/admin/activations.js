@@ -220,13 +220,14 @@ export default async (req, res) => {
       const points_total = user.points + activation.points;
       console.log({ points_total });
 
-      const _activated = user._activated ? true : points_total >= 40;
+      // Nueva regla: activación única al llegar a 180 puntos (primera vez)
+      let _activated = user._activated ? true : points_total >= 180;
       console.log({ _activated });
 
       // Verificar si el usuario estaba activado ANTES de esta aprobación
       const wasActivatedBefore = user.activated;
       
-      const activated = user.activated ? true : points_total >= 120;
+      let activated = user.activated ? true : points_total >= 180;
       console.log({ activated });
       console.log('Usuario estaba activado antes:', wasActivatedBefore);
       console.log('Usuario está activado ahora:', activated);
@@ -265,8 +266,8 @@ export default async (req, res) => {
         
         console.log(`📦 Distribuidor ${user.name}: Total productos comprados: ${totalProducts}`);
         
-        // Si tiene 4 o más productos, ACTIVAR
-        if (totalProducts >= 4) {
+      // Si tiene 4 o más productos, ACTIVAR (solo si también cumple 180 puntos)
+      if (totalProducts >= 4 && points_total >= 180) {
           console.log(`✅ ACTIVANDO Distribuidor ${user.name} - Alcanzó ${totalProducts} productos`);
           await User.update(
             { id: user.id },
@@ -284,7 +285,7 @@ export default async (req, res) => {
       // ============================================================================
 
       // Migrar saldo solo cuando el usuario se activa por primera vez (cambia de false a true)
-      // Esto ocurre cuando el usuario alcanza 120 puntos por primera vez
+      // Esto ocurre cuando el usuario alcanza 180 puntos por primera vez
       const isFirstTimeActivation = !wasActivatedBefore && activated;
       
       console.log('¿Es primera activación?', isFirstTimeActivation);
@@ -513,8 +514,8 @@ export default async (req, res) => {
 
       await User.update({ id: user.id }, { points: user.points });
 
-      const _activated = user._activated ? true : user.points >= 40;
-      const activated = user.activated ? true : user.points >= 120;
+      const _activated = user._activated ? true : user.points >= 180;
+      const activated = user.activated ? true : user.points >= 180;
 
       await User.update(
         { id: user.id },
@@ -573,8 +574,8 @@ export default async (req, res) => {
         console.log(`Revirtiendo puntos: ${user.points} - ${activation.points} = ${new_points}`);
         
         // Recalcular estados de activación
-        const _activated = user._activated ? (new_points >= 40) : false;
-        const activated = user.activated ? (new_points >= 120) : false;
+        const _activated = user._activated ? (new_points >= 180) : false;
+        const activated = user.activated ? (new_points >= 180) : false;
         
         await User.update(
           { id: user.id },
