@@ -35,15 +35,58 @@ let tree = null;
 // Todos los paquetes pagan 5 niveles básicos
 // ============================================================================
 
-// Tabla de porcentajes para los primeros 5 niveles
-// Estos porcentajes se aplican sobre los PUNTOS del afiliado
-const PERCENTAGE_TABLE_5_LEVELS = [
-  0.73,  // Nivel 1: 73%
-  0.05,  // Nivel 2: 5%
-  0.10,  // Nivel 3: 10%
-  0.04,  // Nivel 4: 4%
-  0.02   // Nivel 5: 2%
-];
+// Porcentajes por nivel (Documento base Harmony - Mayo):
+// - Niveles 1..5: 0.73, 0.05, 0.10, 0.04, 0.02
+// - Niveles 6..9: 0.02
+// - Niveles 10..30: 0.01
+function getPercentageForLevel(level1Based) {
+  if (level1Based <= 0) return 0;
+  if (level1Based === 1) return 0.73;
+  if (level1Based === 2) return 0.05;
+  if (level1Based === 3) return 0.10;
+  if (level1Based === 4) return 0.04;
+  if (level1Based === 5) return 0.02;
+  if (level1Based >= 6 && level1Based <= 9) return 0.02;
+  if (level1Based >= 10 && level1Based <= 30) return 0.01;
+  return 0;
+}
+
+// Profundidad habilitada por rango del cobrador (depende del RANGO MÁXIMO HISTÓRICO alcanzado).
+// En el sistema, ese valor se guarda en `user.rank` (editable desde admin).
+function normalizeRankKey(rank) {
+  if (!rank) return "SIN_RANGO";
+  const s = String(rank)
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/Á/g, "A")
+    .replace(/É/g, "E")
+    .replace(/Í/g, "I")
+    .replace(/Ó/g, "O")
+    .replace(/Ú/g, "U");
+  // Aceptar variantes comunes
+  if (s === "NONE" || s === "NO_RANK" || s === "SINRANGO") return "SIN_RANGO";
+  return s;
+}
+
+const RANK_MAX_LEVELS = {
+  SIN_RANGO: 5,
+  MILLONARIO: 5,
+  ORO: 5,
+  ESMERALDA: 6,
+  PLATINO: 7,
+  DIAMANTE: 8,
+  DIAMANTE_AZUL: 9,
+  DIAMANTE_EJECUTIVO: 10,
+  DOBLE_DIAMANTE: 11,
+  DIAMANTE_CORONA: 12,
+  TOP_HARMONY: 30,
+};
+
+function getMaxLevelsForUser(user) {
+  const key = normalizeRankKey(user?.rank);
+  return RANK_MAX_LEVELS[key] ?? 5;
+}
 
 // REGLA ESPECIAL: Distribuidor paga fijo S/ 50 en nivel 1 solamente
 const DISTRIBUTOR_FIXED_PAYMENT = 50;
@@ -70,8 +113,8 @@ async function pay_bonus_percentage(
   affiliatedUserId,
   migration = false
 ) {
-  // Límite: Solo 5 niveles básicos
-  if (level >= 5) return;
+  // Límite de recorrido: el plan de compensación permite hasta 30 niveles (Top Harmony)
+  if (level >= 30) return;
 
   const user = users.find((e) => e.id === userId);
   const node = tree.find((e) => e.id === userId);
@@ -104,13 +147,16 @@ async function pay_bonus_percentage(
   // Calcular el pago
   let payment = 0;
 
-  if (isActive) {
+  // Profundidad habilitada por el rango del usuario (máximo histórico)
+  const maxLevels = getMaxLevelsForUser(user);
+
+  if (isActive && level < maxLevels) {
     // CASO ESPECIAL: Distribuidor recibe pago fijo en nivel 1
     if (affiliatedPlan === 'basic' && level === 0) {
       payment = DISTRIBUTOR_FIXED_PAYMENT; // S/ 50 fijo
     } else {
-      // Caso normal: Porcentaje sobre puntos
-      const percentage = PERCENTAGE_TABLE_5_LEVELS[level];
+      // Caso normal: Porcentaje sobre puntos según nivel
+      const percentage = getPercentageForLevel(level + 1);
       payment = affiliatedPoints * percentage;
     }
 
@@ -128,15 +174,15 @@ async function pay_bonus_percentage(
         virtual,
         _user_id: affiliatedUserId,
         // Campos adicionales para tracking
-        level: level + 1, // Guardar nivel (1-5)
-        percentage: affiliatedPlan === 'basic' && level === 0 ? null : PERCENTAGE_TABLE_5_LEVELS[level],
+        level: level + 1, // Guardar nivel (1-30)
+        percentage: affiliatedPlan === 'basic' && level === 0 ? null : getPercentageForLevel(level + 1),
         points_base: affiliatedPoints
       });
       pays.push(transactionId);
     }
   }
 
-  // Continuar hacia arriba (siempre, hasta 5 niveles)
+  // Continuar hacia arriba (siempre, hasta 30 niveles)
   if (node.parent) {
     await pay_bonus_percentage(
       node.parent,
