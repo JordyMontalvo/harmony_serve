@@ -51,8 +51,8 @@ function getPercentageForLevel(level1Based) {
   return 0;
 }
 
-// Profundidad habilitada por rango del cobrador (depende del RANGO MÁXIMO HISTÓRICO alcanzado).
-// En el sistema, ese valor se guarda en `user.rank` (editable desde admin).
+// Profundidad habilitada por el rango máximo histórico alcanzado:
+// `rank_max_history` si existe (se actualiza en cierre mensual), si no `rank`.
 function normalizeRankKey(rank) {
   if (!rank) return "SIN_RANGO";
   const s = String(rank)
@@ -84,7 +84,8 @@ const RANK_MAX_LEVELS = {
 };
 
 function getMaxLevelsForUser(user) {
-  const key = normalizeRankKey(user?.rank);
+  const rankForDepth = user?.rank_max_history || user?.rank;
+  const key = normalizeRankKey(rankForDepth);
   return RANK_MAX_LEVELS[key] ?? 5;
 }
 
