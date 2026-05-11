@@ -1,6 +1,27 @@
 /**
- * Harmony rank helpers for admin monthly closure (closeds).
+ * Harmony rank helpers for admin (p. ej. reportes). El cierre mensual usa
+ * `db/rank-calculation-harmony.js` para rangos del periodo (PP/PG/directos).
  */
+const path = require("path")
+
+function loadDbRankHarmony() {
+  const candidates = [
+    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
+    path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
+    path.join(__dirname, "..", "..", "db", "rank-calculation-harmony.js"),
+  ]
+  for (const p of candidates) {
+    try {
+      return require(p)
+    } catch (e) {
+      /* siguiente ruta */
+    }
+  }
+  return null
+}
+
+const dbRankHarmony = loadDbRankHarmony()
+
 function normalizeRankKey(rank) {
   if (!rank) return "SIN_RANGO"
   let s = String(rank)
@@ -46,12 +67,34 @@ function contarActivosDirectos({ directos }, activosList) {
   return n
 }
 
-function calcularRangosTodos(usuariosHarmony, users) {
+function logsForDbRank(second) {
+  if (!Array.isArray(second) || !second.length) return []
+  if (typeof second[0] === "string") return second
+  return []
+}
+
+/**
+ * Rangos del periodo según volumen Harmony. Si existe el paquete `db/`, delega
+ * allí. Si no, usa solo `rank` persistido (nunca rank_max_history).
+ */
+function calcularRangosTodos(usuariosHarmony, usersOrLogs) {
+  if (dbRankHarmony) {
+    return dbRankHarmony.calcularRangosTodos(
+      usuariosHarmony,
+      logsForDbRank(usersOrLogs)
+    )
+  }
+
   const out = {}
-  const userById = new Map((users || []).map((u) => [u.id, u]))
+  const rawList = Array.isArray(usersOrLogs) ? usersOrLogs : []
+  const userDocs =
+    rawList.length && typeof rawList[0] === "object" && rawList[0] !== null
+      ? rawList
+      : []
+  const userById = new Map(userDocs.map((u) => [u.id, u]))
   for (const uh of usuariosHarmony || []) {
     const u = userById.get(uh.id)
-    const raw = u ? u.rank_max_history || u.rank || "none" : "none"
+    const raw = u ? u.rank || "none" : "none"
     const key = normalizeRankKey(raw)
     const rid = RANK_NAME_TO_ID[key]
     out[uh.id] = rid !== undefined && rid !== null ? rid : 0

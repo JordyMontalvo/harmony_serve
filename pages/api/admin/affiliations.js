@@ -32,7 +32,8 @@ let tree = null;
 // ============================================================================
 // NUEVA LÓGICA HARMONY LIFE CORPORATION
 // Sistema de pagos por PORCENTAJES sobre PUNTOS (no sobre soles)
-// Todos los paquetes pagan 5 niveles básicos
+// - Sin rango (SIN_RANGO / active): hasta 3 niveles de profundidad si está activo
+// - Con rango: profundidad según rango máximo (rank_max_history o rank)
 // ============================================================================
 
 // Porcentajes por nivel (Documento base Harmony - Mayo):
@@ -64,13 +65,19 @@ function normalizeRankKey(rank) {
     .replace(/Í/g, "I")
     .replace(/Ó/g, "O")
     .replace(/Ú/g, "U");
-  // Aceptar variantes comunes
-  if (s === "NONE" || s === "NO_RANK" || s === "SINRANGO") return "SIN_RANGO";
+  // Aceptar variantes comunes (ACTIVE = activo sin rango MLM, mismo cupo que SIN_RANGO)
+  if (
+    s === "NONE" ||
+    s === "NO_RANK" ||
+    s === "SINRANGO" ||
+    s === "ACTIVE"
+  )
+    return "SIN_RANGO";
   return s;
 }
 
 const RANK_MAX_LEVELS = {
-  SIN_RANGO: 5,
+  SIN_RANGO: 3,
   MILLONARIO: 5,
   ORO: 5,
   ESMERALDA: 6,
@@ -86,7 +93,7 @@ const RANK_MAX_LEVELS = {
 function getMaxLevelsForUser(user) {
   const rankForDepth = user?.rank_max_history || user?.rank;
   const key = normalizeRankKey(rankForDepth);
-  return RANK_MAX_LEVELS[key] ?? 5;
+  return RANK_MAX_LEVELS[key] ?? RANK_MAX_LEVELS.SIN_RANGO;
 }
 
 // REGLA ESPECIAL: Distribuidor paga fijo S/ 50 en nivel 1 solamente
@@ -98,7 +105,7 @@ let pays = [];
  * Nueva función de pago de bonos por PORCENTAJES sobre PUNTOS
  * 
  * @param {string} userId - ID del usuario que recibirá el bono
- * @param {number} level - Nivel actual (0-4 para niveles 1-5)
+ * @param {number} level - Índice 0-based en la cadena (0 = nivel 1 del bono)
  * @param {string} affiliationId - ID de la afiliación que genera el bono
  * @param {number} affiliatedPoints - PUNTOS del afiliado (no soles)
  * @param {string} affiliatedPlan - Plan del afiliado (basic, standard, master, vip)

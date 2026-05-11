@@ -2,22 +2,27 @@ import path from "path"
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
-function loadHarmonyRank() {
-  const byCwd = path.join(
-    process.cwd(),
-    "components",
-    "rank-calculation-harmony.js"
-  )
-  try {
-    return require(byCwd)
-  } catch (e) {
-    return require("../../../components/rank-calculation-harmony.js")
+/** Cálculo de rangos del periodo (PP/PG/directos) — no usa rank_max_history. */
+function loadDbRankHarmony() {
+  const candidates = [
+    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
+    path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
+  ]
+  for (const p of candidates) {
+    try {
+      return require(p)
+    } catch (e) {
+      /* next path */
+    }
   }
+  return require("../../../../db/rank-calculation-harmony.js")
 }
 
-const harmonyRank = loadHarmonyRank()
-
-const { calcularPP, calcularRangosTodos, contarActivosDirectos } = harmonyRank
+const {
+  calcularPP,
+  calcularRangosTodos,
+  contarActivosDirectos,
+} = loadDbRankHarmony()
 
 const { User, Affiliation, Activation } = db
 const { midd, success, rand } = lib
@@ -75,12 +80,13 @@ function normalizeRankKey(rank) {
     .replace(/Í/g, "I")
     .replace(/Ó/g, "O")
     .replace(/Ú/g, "U")
-  if (s === "NONE" || s === "NO_RANK" || s === "SINRANGO") return "SIN_RANGO"
+  if (s === "NONE" || s === "NO_RANK" || s === "SINRANGO" || s === "ACTIVE")
+    return "SIN_RANGO"
   return s
 }
 
 const RANK_MAX_LEVELS = {
-  SIN_RANGO: 5,
+  SIN_RANGO: 3,
   MILLONARIO: 5,
   ORO: 5,
   ESMERALDA: 6,
@@ -156,18 +162,13 @@ function buildHarmonyUsuarioListFromTree() {
 
 function depthForClosureRank(rankKey) {
   if (rankKey === "none") return 0
-  if (rankKey === "active") return RANK_MAX_LEVELS.MILLONARIO
+  // Activo sin rango MLM en el cierre: mismo tope de profundidad que SIN_RANGO
+  if (rankKey === "active") return RANK_MAX_LEVELS.SIN_RANGO
   const k = normalizeRankKey(rankKey)
   return RANK_MAX_LEVELS[k] ?? RANK_MAX_LEVELS.SIN_RANGO
 }
 
 function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
-  const activosList = usuariosHarmonyList.map((t) => ({
-    id: t.id,
-    puntos_productos: t.puntos_productos,
-    puntos_afiliacion: t.puntos_afiliacion,
-  }))
-
   for (const node of tree) {
     const uh = usuariosHarmonyList.find((e) => e.id === node.id)
     const pp = uh ? calcularPP(uh) : 0
@@ -185,8 +186,8 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
       pp,
       pg_grupal_sin_propio: puntajeGrupalSinPropio(node),
       activos_directos: contarActivosDirectos(
-        { id: node.id, directos: node.childs || [] },
-        activosList
+        { directos: node.childs || [] },
+        usuariosHarmonyList
       ),
       rango_calculado_id: rid || 0,
       rango_guardado_cierre: node.rank,
@@ -204,6 +205,26 @@ function mergeRankMaxHistory(cierreRank, prevUserDoc) {
   const prevStored = prevUserDoc?.rank_max_history || prevUserDoc?.rank || "none"
   if (!cierreRank || cierreRank === "none") return prevStored
   return maxRankPreferStored(cierreRank, prevStored)
+}
+
+/** Platino+ usan compresión dinámica en residual; Millonario–Esmeralda (y active) no. */
+function rankAllowsResidualDynamicCompression(node) {
+  const r = node?.rank
+  if (!r || r === "none") return false
+  const p = pos[r]
+  return typeof p === "number" && p >= pos.PLATINO
+}
+
+/** Primer ancestro con bandera activa en el árbol de cierre (hacia arriba). */
+function findNextActiveAncestorId(fromNode) {
+  let id = fromNode?.parent
+  while (id) {
+    const x = tree.find((e) => e.id == id)
+    if (!x) return null
+    if (x._activated || x.activated) return id
+    id = x.parent
+  }
+  return null
 }
 
 function pay_residual(id, n, user) {
@@ -233,7 +254,19 @@ function pay_residual(id, n, user) {
     }
 
     if (_id) pay_residual(_id, n + 1, user)
-  } else if (_id) pay_residual(_id, n, user)
+  } else if (_id) {
+    // Nivel inactivo: sin compresión (Millonario–Esmeralda / active) se pierde el % de ese nivel (n+1).
+    // Con compresión (Platino+ como próximo cobrador válido) se mantiene n.
+    let nextN = n + 1
+    const nextActiveId = findNextActiveAncestorId(node)
+    if (nextActiveId) {
+      const recipient = tree.find((e) => e.id == nextActiveId)
+      if (recipient && rankAllowsResidualDynamicCompression(recipient)) {
+        nextN = n
+      }
+    }
+    pay_residual(_id, nextN, user)
+  }
 }
 
 export default async (req, res) => {
@@ -295,7 +328,7 @@ export default async (req, res) => {
       })
 
       const usuariosHarmony = buildHarmonyUsuarioListFromTree()
-      const rankIdsPorUsuario = calcularRangosTodos(usuariosHarmony, users)
+      const rankIdsPorUsuario = calcularRangosTodos(usuariosHarmony, [])
       applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmony)
       console.log("2 — rangos Harmony aplicados")
 
