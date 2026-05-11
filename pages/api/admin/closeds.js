@@ -1,7 +1,21 @@
+import path from "path"
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
-const harmonyRank = require("../../../components/rank-calculation-harmony.js")
+function loadHarmonyRank() {
+  const byCwd = path.join(
+    process.cwd(),
+    "components",
+    "rank-calculation-harmony.js"
+  )
+  try {
+    return require(byCwd)
+  } catch (e) {
+    return require("../../../components/rank-calculation-harmony.js")
+  }
+}
+
+const harmonyRank = loadHarmonyRank()
 
 const { calcularPP, calcularRangosTodos, contarActivosDirectos } = harmonyRank
 
@@ -226,8 +240,15 @@ export default async (req, res) => {
   await midd(req, res)
 
   if (req.method == "GET") {
-    let closeds = await Closed.find({})
-    return res.json(success({ closeds }))
+    try {
+      const closeds = await Closed.find({})
+      return res.json(success({ closeds }))
+    } catch (err) {
+      console.error("[admin/closeds GET]", err)
+      return res
+        .status(500)
+        .json(lib.error(err.message || String(err)))
+    }
   }
 
   if (req.method == "POST") {
