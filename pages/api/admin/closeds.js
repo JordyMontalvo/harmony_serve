@@ -1,8 +1,7 @@
 import db from "../../../components/db"
 import lib from "../../../components/lib"
-import path from "path"
 
-const harmonyRank = require(path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"))
+const harmonyRank = require("../../../components/rank-calculation-harmony.js")
 
 const { calcularPP, calcularRangosTodos, contarActivosDirectos } = harmonyRank
 
@@ -275,7 +274,7 @@ export default async (req, res) => {
       })
 
       const usuariosHarmony = buildHarmonyUsuarioListFromTree()
-      const rankIdsPorUsuario = calcularRangosTodos(usuariosHarmony, [])
+      const rankIdsPorUsuario = calcularRangosTodos(usuariosHarmony, users)
       applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmony)
       console.log("2 — rangos Harmony aplicados")
 
