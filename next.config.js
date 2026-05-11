@@ -16,7 +16,7 @@ const nextConfig = {
         // matching all API routes
         source: "/api/:path*",
         headers: [
-          { key: "Access-Control-Allow-Credentials", value: "true" },
+          // Evitar * + Credentials (inválido en navegadores); las rutas API siguen aplicando CORS en lib/midd.
           { key: "Access-Control-Allow-Origin", value: "*" },
           {
             key: "Access-Control-Allow-Methods",

@@ -2,27 +2,33 @@ import path from "path"
 import db from "../../../components/db"
 import lib from "../../../components/lib"
 
-/** Cálculo de rangos del periodo (PP/PG/directos) — no usa rank_max_history. */
+/**
+ * Cálculo de rangos del periodo (PP/PG/directos) — no usa rank_max_history.
+ * Carga en runtime con eval('require') para que Webpack/Next 9 no intente empaquetar ../db (fallaba con 404 en la ruta).
+ */
 function loadDbRankHarmony() {
+  const dynamicRequire = eval("require")
   const candidates = [
     path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
     path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
   ]
   for (const p of candidates) {
     try {
-      return require(p)
+      return dynamicRequire(p)
     } catch (e) {
-      /* next path */
+      /* siguiente ruta */
     }
   }
-  return require("../../../../db/rank-calculation-harmony.js")
+  return dynamicRequire(
+    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js")
+  )
 }
 
-const {
-  calcularPP,
-  calcularRangosTodos,
-  contarActivosDirectos,
-} = loadDbRankHarmony()
+let dbRankHarmonyCached = null
+function getDbRankHarmony() {
+  if (!dbRankHarmonyCached) dbRankHarmonyCached = loadDbRankHarmony()
+  return dbRankHarmonyCached
+}
 
 const { User, Affiliation, Activation } = db
 const { midd, success, rand } = lib
@@ -150,11 +156,12 @@ const RANGO_ID_TO_KEY = {
 }
 
 function buildHarmonyUsuarioListFromTree() {
+  // PP del cierre = solo activaciones (reconsumo/producto). No mezclar puntos de afiliación en lo “personal” para rangos ni activos directos.
   return tree.map((node) => ({
     id: node.id,
     name: node.name,
     puntos_productos: Number(node.points || 0),
-    puntos_afiliacion: Number(node.affiliation_points || 0),
+    puntos_afiliacion: 0,
     total_points: puntajeGrupalSinPropio(node),
     directos: node.childs || [],
   }))
@@ -169,9 +176,10 @@ function depthForClosureRank(rankKey) {
 }
 
 function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
+  const { contarActivosDirectos } = getDbRankHarmony()
   for (const node of tree) {
     const uh = usuariosHarmonyList.find((e) => e.id === node.id)
-    const pp = uh ? calcularPP(uh) : 0
+    const pp = uh ? Number(uh.puntos_productos || 0) : 0
     const rid = rankIdsPorUsuario[node.id] || 0
 
     let rankKey = "none"
@@ -182,6 +190,7 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
     node.rank = rankKey
     node.levels = depthForClosureRank(rankKey)
 
+    const rangoCalculadoNombre = rid ? RANGO_ID_TO_KEY[rid] || "ACTIVO" : "ACTIVO"
     node._harmony_qualification = {
       pp,
       pg_grupal_sin_propio: puntajeGrupalSinPropio(node),
@@ -190,7 +199,15 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
         usuariosHarmonyList
       ),
       rango_calculado_id: rid || 0,
+      rango_calculado_nombre: rangoCalculadoNombre,
       rango_guardado_cierre: node.rank,
+      pp_umbral_activacion_rango: 180,
+      niveles_residual_permitidos: node.levels,
+      /** Este afiliado es Platino+ → en la línea aplica compresión dinámica de residuales hacia arriba. */
+      compresion_residual_activa: rankAllowsResidualDynamicCompression(node),
+      puntos_propios_suma_activ_mas_afil:
+        Number(node.points || 0) + Number(node.affiliation_points || 0),
+      plan: node.plan || null,
     }
   }
 }
@@ -328,6 +345,7 @@ export default async (req, res) => {
       })
 
       const usuariosHarmony = buildHarmonyUsuarioListFromTree()
+      const { calcularRangosTodos } = getDbRankHarmony()
       const rankIdsPorUsuario = calcularRangosTodos(usuariosHarmony, [])
       applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmony)
       console.log("2 — rangos Harmony aplicados")
@@ -406,12 +424,20 @@ export default async (req, res) => {
         if (node.rank != "none") {
           users.push({
             name: node.name,
+            dni: node.dni,
             activated: node.activated,
             _activated: node._activated,
             points: node.points,
+            affiliation_points: node.affiliation_points,
+            plan: node.plan,
+            parentId: node.parentId,
             total: node._total,
+            total_org: node.total_points,
+            levels: node.levels,
             rank: node.rank,
             residual_bonus: node.residual_bonus,
+            residual_bonus_arr: node.residual_bonus_arr,
+            pays_cierre_rango: node._pays || [],
             harmony_qualification: node._harmony_qualification,
           })
         }
