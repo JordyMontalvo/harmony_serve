@@ -51,6 +51,7 @@ const Pay = {
 }
 
 const QUALIFICATION_REQUALIFICATION_RATE = 0.2
+const ACTIVE_POINTS_THRESHOLD = 180
 
 const pays = [
   { name: "MILLONARIO", payed: false },
@@ -247,8 +248,12 @@ function isTrueDbFlag(value) {
   return value === true || value === 1 || value === "true" || value === "TRUE" || value === "1"
 }
 
+function hasActivationPoints(record) {
+  return Number(record?.points || record?.puntos_productos || 0) >= ACTIVE_POINTS_THRESHOLD
+}
+
 function isFullActivated(record) {
-  return isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED)
+  return isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED) || hasActivationPoints(record)
 }
 
 function isActiveForClosure(record) {
