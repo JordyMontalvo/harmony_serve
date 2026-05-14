@@ -39,16 +39,18 @@ let tree
 
 const Pay = {
   MILLONARIO:          0,
-  ORO:                 0,
-  ESMERALDA:           0,
-  PLATINO:             0,
-  DIAMANTE:            0,
-  DIAMANTE_AZUL:       0,
-  DIAMANTE_EJECUTIVO:  0,
-  DOBLE_DIAMANTE:      0,
-  DIAMANTE_CORONA:     0,
-  TOP_HARMONY:         0,
+  ORO:                 80,
+  ESMERALDA:           120,
+  PLATINO:             350,
+  DIAMANTE:            800,
+  DIAMANTE_AZUL:       3000,
+  DIAMANTE_EJECUTIVO:  5000,
+  DOBLE_DIAMANTE:      10000,
+  DIAMANTE_CORONA:     15000,
+  TOP_HARMONY:         30000,
 }
+
+const QUALIFICATION_REQUALIFICATION_RATE = 0.2
 
 const pays = [
   { name: "MILLONARIO", payed: false },
@@ -222,6 +224,80 @@ function maxRankPreferStored(a, b) {
   return pa >= pb ? rankA : rankB
 }
 
+function rankPosition(rank) {
+  const key = !rank || rank === "none" ? "none" : normalizeRankKey(rank)
+  return pos[key] !== undefined ? pos[key] : -999
+}
+
+function normalizePaysList(userPays) {
+  const source = Array.isArray(userPays) ? userPays : []
+  const byName = new Map(source.map((p) => [normalizeRankKey(p.name), p]))
+  return pays.map((template) => {
+    const prev = byName.get(template.name)
+    return {
+      ...template,
+      ...(prev || {}),
+      name: template.name,
+      payed: prev ? Boolean(prev.payed) : false,
+    }
+  })
+}
+
+function buildQualificationPayments(node) {
+  const rankKey = normalizeRankKey(node.rank)
+  const rankPos = rankPosition(rankKey)
+  if (rankPos < pos.ORO) return []
+
+  const prevMaxRank = node.rank_max_history || node.previous_rank_max_history || "none"
+  const prevMaxPos = rankPosition(prevMaxRank)
+  const nodePays = normalizePaysList(node.pays)
+  node.pays = nodePays
+
+  if (rankPos > prevMaxPos) {
+    return nodePays
+      .filter((pay) => {
+        const payRank = normalizeRankKey(pay.name)
+        const payPos = rankPosition(payRank)
+        return (
+          payPos >= pos.ORO &&
+          payPos <= rankPos &&
+          payPos > prevMaxPos &&
+          !pay.payed &&
+          Number(Pay[payRank] || 0) > 0
+        )
+      })
+      .map((pay) => {
+        const payRank = normalizeRankKey(pay.name)
+        const value = Number(Pay[payRank] || 0)
+        return {
+          ...pay,
+          name: payRank,
+          value,
+          base_value: value,
+          percentage: 1,
+          type: "primera_calificacion",
+        }
+      })
+  }
+
+  if (rankPos === prevMaxPos) {
+    const baseValue = Number(Pay[rankKey] || 0)
+    if (baseValue <= 0) return []
+    return [
+      {
+        name: rankKey,
+        payed: true,
+        value: Number((baseValue * QUALIFICATION_REQUALIFICATION_RATE).toFixed(2)),
+        base_value: baseValue,
+        percentage: QUALIFICATION_REQUALIFICATION_RATE,
+        type: "recalificacion",
+      },
+    ]
+  }
+
+  return []
+}
+
 function mergeRankMaxHistory(cierreRank, prevUserDoc) {
   const prevStored = prevUserDoc?.rank_max_history || prevUserDoc?.rank || "none"
   if (!cierreRank || cierreRank === "none") return prevStored
@@ -326,7 +402,8 @@ export default async (req, res) => {
         node._activated = user._activated ? user._activated : false
         node.points = Number(user.points)
         node.affiliation_points = user.affiliation_points ? user.affiliation_points : 0
-        node.pays = user.pays ? user.pays : pays
+        node.pays = normalizePaysList(user.pays)
+        node.rank_max_history = user.rank_max_history || user.rank || "none"
         node.bonuses = user.bonuses ? user.bonuses : emptyBonuses()
         node.n_inactives = user.n_inactives ? user.n_inactives : 0
         node.residual_bonus = 0
@@ -391,20 +468,7 @@ export default async (req, res) => {
       }
 
       for (let node of tree) {
-        const { rank } = node
-        if (rank != "none") {
-          const payIdx = node.pays.findIndex((e) => e.name == rank)
-          if (payIdx != -1) {
-            for (let i = 0; i <= payIdx; i++) {
-              const pay = node.pays[i]
-              if (!pay.payed) {
-                const value = Pay[pay.name]
-                pay.value = value
-                node._pays.push(pay)
-              }
-            }
-          }
-        }
+        node._pays = buildQualificationPayments(node)
       }
       console.log("4")
 
@@ -469,20 +533,28 @@ export default async (req, res) => {
             name: "residual",
           })
 
-          const payIdx = node.pays.findIndex((e) => e.name == rnk)
-          if (payIdx != -1) {
-            for (let i = 0; i <= payIdx; i++) {
-              const pay = node.pays[i]
-              if (!pay.payed) {
-                await Transaction.insert({
-                  date: new Date(),
-                  user_id: node.id,
-                  type: "in",
-                  value: Pay[pay.name],
-                  name: "closed bonus",
-                })
-                pay.payed = true
-              }
+          const qualificationPays = Array.isArray(node._pays) && node._pays.length
+            ? node._pays
+            : buildQualificationPayments(node)
+
+          for (const pay of qualificationPays) {
+            const payRank = normalizeRankKey(pay.name)
+            const value = Number(pay.value || 0)
+            if (value <= 0) continue
+
+            await Transaction.insert({
+              date: new Date(),
+              user_id: node.id,
+              type: "in",
+              value,
+              name: "closed bonus",
+            })
+
+            if (pay.type !== "recalificacion") {
+              const payIdx = node.pays.findIndex(
+                (e) => normalizeRankKey(e.name) == payRank
+              )
+              if (payIdx != -1) node.pays[payIdx].payed = true
             }
           }
         }
