@@ -243,6 +243,18 @@ function normalizePaysList(userPays) {
   })
 }
 
+function isTrueDbFlag(value) {
+  return value === true || value === 1 || value === "true" || value === "TRUE" || value === "1"
+}
+
+function isFullActivated(record) {
+  return isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED)
+}
+
+function isActiveForClosure(record) {
+  return isFullActivated(record) || isTrueDbFlag(record?._activated) || isTrueDbFlag(record?.active)
+}
+
 function buildQualificationPayments(node) {
   const rankKey = normalizeRankKey(node.rank)
   const rankPos = rankPosition(rankKey)
@@ -318,7 +330,7 @@ function findNextActiveAncestorId(fromNode) {
   while (id) {
     const x = tree.find((e) => e.id == id)
     if (!x) return null
-    if (x._activated || x.activated) return id
+    if (isActiveForClosure(x)) return id
     id = x.parent
   }
   return null
@@ -331,8 +343,8 @@ function pay_residual(id, n, user) {
   if (!node) return
   let _id = node.parent
 
-  if (node._activated || node.activated) {
-    const rr = node.activated ? 1 : 0.5
+  if (isActiveForClosure(node)) {
+    const rr = isFullActivated(node) ? 1 : 0.5
     const pct = getPercentageForLevel(n + 1)
 
     if (node.levels > n && pct > 0 && user.points) {
@@ -398,8 +410,10 @@ export default async (req, res) => {
         node.plan = user.plan
         node.dni = user.dni
         node.name = user.name + " " + user.lastName
-        node.activated = user.activated
-        node._activated = user._activated ? user._activated : false
+        node.ACTIVATED = isTrueDbFlag(user.ACTIVATED)
+        node.activated = isFullActivated(user)
+        node._activated = isTrueDbFlag(user._activated)
+        node.active = isActiveForClosure(node)
         node.points = Number(user.points)
         node.affiliation_points = user.affiliation_points ? user.affiliation_points : 0
         node.pays = normalizePaysList(user.pays)
@@ -495,6 +509,8 @@ export default async (req, res) => {
             dni: node.dni,
             activated: node.activated,
             _activated: node._activated,
+            ACTIVATED: node.ACTIVATED,
+            active: node.active,
             points: node.points,
             affiliation_points: node.affiliation_points,
             plan: node.plan,
@@ -559,7 +575,7 @@ export default async (req, res) => {
           }
         }
 
-        if (!node.activated) node.n_inactives + 1
+        if (!isActiveForClosure(node)) node.n_inactives += 1
       }
 
       await User.updateMany(
@@ -567,6 +583,8 @@ export default async (req, res) => {
         {
           activated: false,
           _activated: false,
+          ACTIVATED: false,
+          active: false,
           rank: "none",
           points: 0,
           affiliation_points: 0,
