@@ -32,7 +32,7 @@ let tree = null;
 // ============================================================================
 // NUEVA LÓGICA HARMONY LIFE CORPORATION
 // Sistema de pagos por PORCENTAJES sobre PUNTOS (no sobre soles)
-// - Sin rango (SIN_RANGO / active): hasta 3 niveles de profundidad si está activo
+// - Sin rango (SIN_RANGO): hasta 3 niveles de profundidad si está activo
 // - Con rango: profundidad según rango máximo (rank_max_history o rank)
 // ============================================================================
 

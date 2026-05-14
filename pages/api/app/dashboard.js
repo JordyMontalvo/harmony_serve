@@ -5,6 +5,22 @@ const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig } = db
 const { error, success, acum, midd,model } = lib
 
 const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'address', 'rank', 'points', 'parentId', 'total_points']
+
+function normalizeRankKey(rank) {
+  const key = String(rank || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+
+  if (!key || key === "NONE" || key === "NO_RANK" || key === "SINRANGO" || key === "ACTIVE") {
+    return "SIN_RANGO"
+  }
+
+  return key
+}
+
 export default async (req, res) => {
   await midd(req, res)
 
@@ -97,7 +113,8 @@ export default async (req, res) => {
     outs,
     balance: (ins - outs),
    _balance: (insVirtual - outsVirtual),
-    rank:    user.rank,
+    rank:    normalizeRankKey(user.rank),
+    maxRank: normalizeRankKey(user.rank_max_history || user.rank),
     points:  user.points,
     plans,
     total_points: user.total_points, // <-- Agregar todos los planes a la respuesta

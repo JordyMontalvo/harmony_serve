@@ -4,6 +4,20 @@ import lib from "../../../components/lib"
 const { Banner } = db
 const { success, midd } = lib
 
+const DEFAULT_RANK_IMAGES = {
+  id: "rank_images",
+  millonario: "",
+  oro: "",
+  esmeralda: "",
+  platino: "",
+  diamante: "",
+  diamante_azul: "",
+  diamante_ejecutivo: "",
+  doble_diamante: "",
+  diamante_corona: "",
+  top_harmony: "",
+}
+
 export default async (req, res) => {
   await midd(req, res)
 
@@ -13,20 +27,7 @@ export default async (req, res) => {
     
     // Si no existe, crear uno vacío con las categorías
     if (!rankImages) {
-      rankImages = {
-        id: "rank_images",
-        master: "",
-        plata: "",
-        oro: "",
-        zafiro: "",
-        rubi: "",
-        esmeralda: "",
-        diamante: "",
-        diamante_azul: "",
-        diamante_negro: "",
-        diamante_corona: "",
-        diamante_imperial: "",
-      }
+      rankImages = { ...DEFAULT_RANK_IMAGES }
       await Banner.insert(rankImages)
     }
 
@@ -49,18 +50,7 @@ export default async (req, res) => {
       await Banner.update({ id: "rank_images" }, updateData)
     } else {
       const newBanner = {
-        id: "rank_images",
-        master: "",
-        plata: "",
-        oro: "",
-        zafiro: "",
-        rubi: "",
-        esmeralda: "",
-        diamante: "",
-        diamante_azul: "",
-        diamante_negro: "",
-        diamante_corona: "",
-        diamante_imperial: "",
+        ...DEFAULT_RANK_IMAGES,
         ...updateData
       }
       await Banner.insert(newBanner)

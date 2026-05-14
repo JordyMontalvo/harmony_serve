@@ -17,10 +17,10 @@ const handler = async (req, res) => {
   const user = await User.findOne({ id: session.id })
 
   const bonuses = {
-    sapphire: [],
-    ruby: [],
-    gold: [],
-    diamond: [],
+    platino: [],
+    diamante: [],
+    diamante_azul: [],
+    diamante_ejecutivo: [],
   }
 
   // response

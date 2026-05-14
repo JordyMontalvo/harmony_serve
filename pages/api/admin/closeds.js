@@ -107,7 +107,7 @@ const RANK_MAX_LEVELS = {
 
 const pos = {
   none: -1,
-  active: 0,
+  SIN_RANGO: 0,
   MILLONARIO: 1,
   ORO: 2,
   ESMERALDA: 3,
@@ -120,11 +120,13 @@ const pos = {
   TOP_HARMONY: 10,
 }
 
-const bonuses = {
-  gold: [],
-  sapphire: [],
-  ruby: [],
-  diamond: [],
+function emptyBonuses() {
+  return {
+    platino: [],
+    diamante: [],
+    diamante_azul: [],
+    diamante_ejecutivo: [],
+  }
 }
 
 function total_points(id) {
@@ -169,8 +171,6 @@ function buildHarmonyUsuarioListFromTree() {
 
 function depthForClosureRank(rankKey) {
   if (rankKey === "none") return 0
-  // Activo sin rango MLM en el cierre: mismo tope de profundidad que SIN_RANGO
-  if (rankKey === "active") return RANK_MAX_LEVELS.SIN_RANGO
   const k = normalizeRankKey(rankKey)
   return RANK_MAX_LEVELS[k] ?? RANK_MAX_LEVELS.SIN_RANGO
 }
@@ -184,13 +184,15 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
 
     let rankKey = "none"
     if (pp < 180) rankKey = "none"
-    else if (!rid) rankKey = "active"
-    else rankKey = RANGO_ID_TO_KEY[rid] || "active"
+    else if (!rid) rankKey = "SIN_RANGO"
+    else rankKey = RANGO_ID_TO_KEY[rid] || "SIN_RANGO"
 
     node.rank = rankKey
     node.levels = depthForClosureRank(rankKey)
 
-    const rangoCalculadoNombre = rid ? RANGO_ID_TO_KEY[rid] || "ACTIVO" : "ACTIVO"
+    const rangoCalculadoNombre = rid
+      ? RANGO_ID_TO_KEY[rid] || "SIN_RANGO"
+      : "SIN_RANGO"
     node._harmony_qualification = {
       pp,
       pg_grupal_sin_propio: puntajeGrupalSinPropio(node),
@@ -213,9 +215,11 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
 }
 
 function maxRankPreferStored(a, b) {
-  const pa = pos[a] !== undefined ? pos[a] : -999
-  const pb = pos[b] !== undefined ? pos[b] : -999
-  return pa >= pb ? a : b
+  const rankA = !a || a === "none" ? "none" : normalizeRankKey(a)
+  const rankB = !b || b === "none" ? "none" : normalizeRankKey(b)
+  const pa = pos[rankA] !== undefined ? pos[rankA] : -999
+  const pb = pos[rankB] !== undefined ? pos[rankB] : -999
+  return pa >= pb ? rankA : rankB
 }
 
 function mergeRankMaxHistory(cierreRank, prevUserDoc) {
@@ -224,11 +228,11 @@ function mergeRankMaxHistory(cierreRank, prevUserDoc) {
   return maxRankPreferStored(cierreRank, prevStored)
 }
 
-/** Platino+ usan compresión dinámica en residual; Millonario–Esmeralda (y active) no. */
+/** Platino+ usan compresión dinámica en residual; Millonario-Esmeralda y SIN_RANGO no. */
 function rankAllowsResidualDynamicCompression(node) {
   const r = node?.rank
   if (!r || r === "none") return false
-  const p = pos[r]
+  const p = pos[normalizeRankKey(r)]
   return typeof p === "number" && p >= pos.PLATINO
 }
 
@@ -272,7 +276,7 @@ function pay_residual(id, n, user) {
 
     if (_id) pay_residual(_id, n + 1, user)
   } else if (_id) {
-    // Nivel inactivo: sin compresión (Millonario–Esmeralda / active) se pierde el % de ese nivel (n+1).
+    // Nivel inactivo: sin compresión (Millonario-Esmeralda / SIN_RANGO) se pierde el % de ese nivel (n+1).
     // Con compresión (Platino+ como próximo cobrador válido) se mantiene n.
     let nextN = n + 1
     const nextActiveId = findNextActiveAncestorId(node)
@@ -323,7 +327,7 @@ export default async (req, res) => {
         node.points = Number(user.points)
         node.affiliation_points = user.affiliation_points ? user.affiliation_points : 0
         node.pays = user.pays ? user.pays : pays
-        node.bonuses = user.bonuses ? user.bonuses : bonuses
+        node.bonuses = user.bonuses ? user.bonuses : emptyBonuses()
         node.n_inactives = user.n_inactives ? user.n_inactives : 0
         node.residual_bonus = 0
         node.residual_bonus_arr = []

@@ -46,7 +46,7 @@ const RANK_MAX_LEVELS = {
 
 const pos = {
   none: -1,
-  active: 0,
+  SIN_RANGO: 0,
   MILLONARIO: 1,
   ORO: 2,
   ESMERALDA: 3,
@@ -77,14 +77,13 @@ function normalizeRankKey(rank) {
 
 function depthForClosureRank(rankKey) {
   if (rankKey === "none") return 0
-  if (rankKey === "active") return RANK_MAX_LEVELS.SIN_RANGO
   const k = normalizeRankKey(rankKey)
   return RANK_MAX_LEVELS[k] ?? RANK_MAX_LEVELS.SIN_RANGO
 }
 
 function rankAllowsResidualDynamicCompression(rank) {
   if (!rank || rank === "none") return false
-  const p = pos[rank]
+  const p = pos[normalizeRankKey(rank)]
   return typeof p === "number" && p >= pos.PLATINO
 }
 

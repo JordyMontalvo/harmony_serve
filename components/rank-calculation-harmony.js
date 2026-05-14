@@ -39,7 +39,6 @@ function normalizeRankKey(rank) {
 
 const RANK_NAME_TO_ID = {
   SIN_RANGO: 0,
-  ACTIVE: 0,
   MILLONARIO: 1,
   ORO: 2,
   ESMERALDA: 3,
