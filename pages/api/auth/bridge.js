@@ -1,54 +1,54 @@
-import { DB, User, Session } from "../../../components/db";
+import db from "../../../components/db"
+import lib from "../../../components/lib"
 
-const db = new DB({
-  User: new User(),
-  Session: new Session(),
-});
+const { User, Session } = db
+const { rand, error, midd } = lib
 
-export default async function handler(req, res) {
-  const { dni, admin_token, path = 'dashboard' } = req.query;
+const MASTER_ADMIN_TOKEN = 'otdxDIds3wtui3enxb'
 
-  // 1. Validar permiso de admin (Token Maestro o Sesión real)
-  const MASTER_TOKEN = "otdxDIds3wtui3enxb";
-  if (!admin_token || (admin_token !== MASTER_TOKEN)) {
-    return res.status(401).send("Acceso Denegado: Admin Token Inválido");
+const handler = async (req, res) => {
+  const { dni, admin_token, path = 'dashboard' } = req.query
+
+  // 1. Validar token de admin
+  if (!admin_token || admin_token !== MASTER_ADMIN_TOKEN) {
+    return res.status(401).send("Acceso Denegado")
   }
 
-  try {
-    // 2. Buscar al usuario socio
-    const user = await db.User.findOne({ dni });
-    if (!user) {
-      return res.status(404).send("Usuario no encontrado");
-    }
-
-    // 3. Crear una sesión real en la DB
-    const sessionValue = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    await db.Session.insert({
-      value: sessionValue,
-      user_id: user._id,
-      dni: user.dni,
-      createdAt: new Date()
-    });
-
-    // 4. Construir URL de redirección a la APP (Vía ruta desprotegida /sudo-login)
-    const appUrl = process.env.VUE_APP_URL || "https://harmonyy-x5sr.vercel.app";
-    const redirectUrl = new URL(`${appUrl.replace(/\/$/, '')}/sudo-login`);
-    
-    redirectUrl.searchParams.set('session', sessionValue);
-    redirectUrl.searchParams.set('dni', user.dni);
-    redirectUrl.searchParams.set('name', user.name || '');
-    redirectUrl.searchParams.set('lastName', user.lastName || '');
-    redirectUrl.searchParams.set('affiliated', user.affiliated !== false ? 'true' : 'false');
-    redirectUrl.searchParams.set('office_id', 'central');
-    redirectUrl.searchParams.set('path', path);
-
-    console.log(`Bridge: Redirigiendo a SUDO-LOGIN -> ${redirectUrl.toString()}`);
-    
-    // 5. Redirección HTTP 302
-    res.redirect(302, redirectUrl.toString());
-
-  } catch (error) {
-    console.error("Bridge Error:", error);
-    res.status(500).send("Error interno en el Bridge");
+  // 2. Buscar usuario
+  const user = await User.findOne({ dni })
+  if (!user) {
+    return res.status(404).send("Usuario no encontrado: " + dni)
   }
+
+  // 3. Crear sesión real en DB (igual que sudo.js)
+  const sessionValue = rand() + rand() + rand()
+  await Session.insert({
+    id: user.id,
+    value: sessionValue,
+    date: new Date(),
+    dni: user.dni,
+    name: user.name,
+    lastName: user.lastName,
+    type: user.type || 'user'
+  })
+
+  // 4. Redirigir al /sudo-login de la App con todos los datos
+  const appUrl = process.env.VUE_APP_URL || "https://harmonyy-x5sr.vercel.app"
+  const redirectUrl = new URL(`${appUrl.replace(/\/$/, '')}/sudo-login`)
+
+  redirectUrl.searchParams.set('session', sessionValue)
+  redirectUrl.searchParams.set('dni', user.dni)
+  redirectUrl.searchParams.set('name', user.name || '')
+  redirectUrl.searchParams.set('lastName', user.lastName || '')
+  redirectUrl.searchParams.set('affiliated', user.affiliated !== false ? 'true' : 'false')
+  redirectUrl.searchParams.set('path', path)
+
+  console.log(`Bridge: ${user.dni} -> ${redirectUrl.toString()}`)
+
+  return res.redirect(302, redirectUrl.toString())
+}
+
+export default async (req, res) => {
+  await midd(req, res)
+  return handler(req, res)
 }
