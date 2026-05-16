@@ -1,6 +1,8 @@
-const User = require('../../models/user')
-const Session = require('../../models/session')
-const { rand, error, success, midd } = require('../../components/lib')
+import db from "../../../components/db"
+import lib from "../../../components/lib"
+
+const { User, Session } = db
+const { rand, error, success, midd } = lib
 
 const handler = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json(error('Method not allowed'))
