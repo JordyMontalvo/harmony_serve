@@ -30,11 +30,9 @@ export default async function handler(req, res) {
       createdAt: new Date()
     });
 
-    // 4. Construir URL de redirección a la APP
-    // Como el API y la APP suelen estar en el mismo dominio base o se conocen,
-    // redirigimos directamente con los datos inyectados.
+    // 4. Construir URL de redirección a la APP (Vía ruta desprotegida /sudo-login)
     const appUrl = process.env.VUE_APP_URL || "https://harmonyy-x5sr.vercel.app";
-    const redirectUrl = new URL(`${appUrl}/${path.replace(/^\//, '')}`);
+    const redirectUrl = new URL(`${appUrl.replace(/\/$/, '')}/sudo-login`);
     
     redirectUrl.searchParams.set('session', sessionValue);
     redirectUrl.searchParams.set('dni', user.dni);
@@ -42,8 +40,9 @@ export default async function handler(req, res) {
     redirectUrl.searchParams.set('lastName', user.lastName || '');
     redirectUrl.searchParams.set('affiliated', user.affiliated !== false ? 'true' : 'false');
     redirectUrl.searchParams.set('office_id', 'central');
+    redirectUrl.searchParams.set('path', path);
 
-    console.log(`Bridge: Redirigiendo a ${user.dni} -> ${redirectUrl.toString()}`);
+    console.log(`Bridge: Redirigiendo a SUDO-LOGIN -> ${redirectUrl.toString()}`);
     
     // 5. Redirección HTTP 302
     res.redirect(302, redirectUrl.toString());
