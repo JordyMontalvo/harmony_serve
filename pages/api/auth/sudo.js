@@ -9,12 +9,20 @@ const handler = async (req, res) => {
 
   if (!dni) return res.json(error('DNI is required'))
 
-  // 1. Opcional: Validar que el que solicita es un admin real
-  // Por ahora permitiremos si viene del admin frontend, pero idealmente validamos admin_session
-  if (admin_session) {
-    const adminSess = await Session.findOne({ value: admin_session })
-    if (!adminSess) return res.json(error('Invalid admin session'))
-    // Aquí se podría validar si el usuario es realmente admin
+  // 1. Validar estrictamente que el que solicita es un admin real
+  if (!admin_session) {
+    return res.json(error('Acceso denegado: Se requiere sesión de administrador'))
+  }
+
+  const adminSess = await Session.findOne({ value: admin_session })
+  if (!adminSess) {
+    return res.json(error('Sesión de administrador inválida o expirada'))
+  }
+
+  // Verificar si el usuario de la sesión es admin (validando en la colección User)
+  const requester = await User.findOne({ id: adminSess.id })
+  if (!requester || requester.type !== 'admin') {
+    return res.json(error('Acceso denegado: No tienes permisos de administrador'))
   }
 
   // 2. Buscar al usuario objetivo
