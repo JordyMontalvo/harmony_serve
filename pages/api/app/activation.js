@@ -274,6 +274,8 @@ export default async (req, res) => {
           virtual: false,
         })
       }
+    } else {
+      amounts = [0, 0, price]
     }
 
     // save new activation
