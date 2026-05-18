@@ -197,7 +197,7 @@ export default async (req, res) => {
         affiliated: user.affiliated || (affiliation && affiliation.status === 'approved'),
         _activated: user._activated,
         activated: user.activated,
-        plan: (user.plan && user.plan !== "default") ? user.plan : (affiliation && affiliation.status === 'approved' && affiliation.plan ? affiliation.plan.id : "default"),
+        plan: (user.plan && user.plan !== "default") ? user.plan : (affiliation && affiliation.plan ? affiliation.plan.id : "default"),
         country: user.country,
         photo: user.photo,
         tree: user.tree,

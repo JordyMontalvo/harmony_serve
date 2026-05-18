@@ -52,15 +52,15 @@ export default async (req, res) => {
 
   if(user.activated) activateds--
 
-  // Buscar última afiliación aprobada como fallback robusto para el plan
-  const lastApprovedAffiliation = await Affiliation.findOneLast({
+  // Buscar última afiliación (aprobada o pendiente) como fallback robusto para el plan
+  const lastAffiliation = await Affiliation.findOneLast({
     userId: user.id,
-    status: "approved"
+    status: { $in: ["approved", "pending"] }
   }).catch(() => null)
 
   const userPlan = (user.plan && user.plan !== "default")
     ? user.plan
-    : (lastApprovedAffiliation && lastApprovedAffiliation.plan ? lastApprovedAffiliation.plan.id : "default")
+    : (lastAffiliation && lastAffiliation.plan ? lastAffiliation.plan.id : "default")
 
   // response
   return res.json(success({
