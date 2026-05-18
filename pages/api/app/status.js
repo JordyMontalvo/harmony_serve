@@ -52,15 +52,20 @@ export default async (req, res) => {
 
   if(user.activated) activateds--
 
-  // Buscar última afiliación (aprobada o pendiente) como fallback robusto para el plan
-  const lastAffiliation = await Affiliation.findOneLast({
+  const affiliationList = await Affiliation.find({
     userId: user.id,
-    status: { $in: ["approved", "pending"] }
-  }).catch(() => null)
+    status: { $in: ["approved", "pending"] },
+  }).catch(() => [])
 
-  const userPlan = (user.plan && user.plan !== "default")
-    ? user.plan
-    : (lastAffiliation && lastAffiliation.plan ? lastAffiliation.plan.id : "default")
+  const sortedAff =
+    Array.isArray(affiliationList) && affiliationList.length
+      ? [...affiliationList].sort(
+          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
+        )
+      : []
+  const lastAffiliation = sortedAff[0] || null
+
+  const userPlan = lib.resolveUserPlanId(user, lastAffiliation)
 
   // response
   return res.json(success({

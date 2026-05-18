@@ -59,6 +59,29 @@ class Lib {
     return ret;
   }
 
+  /**
+   * Id de plan homogéneo (string) desde usuario o última afiliación.
+   * Evita quedarse en "default" cuando user.plan es objeto o la afiliación guarda plan embebido.
+   */
+  resolveUserPlanId(user, lastAffiliationRecord) {
+    if (!user) return "default";
+    const up = user.plan;
+    if (up && up !== "default") {
+      if (typeof up === "object" && up !== null) {
+        const id = up.id || up.plan_id;
+        return id ? String(id) : "default";
+      }
+      return String(up);
+    }
+    if (!lastAffiliationRecord || !lastAffiliationRecord.plan) return "default";
+    const ap = lastAffiliationRecord.plan;
+    if (typeof ap === "object" && ap !== null) {
+      const id = ap.id || ap.plan_id;
+      return id ? String(id) : "default";
+    }
+    return ap ? String(ap) : "default";
+  }
+
   // Actualiza total_points de un nodo y propaga hacia arriba
   async updateTotalPointsCascade(User, Tree, userId) {
     // 1. Obtener el nodo del árbol

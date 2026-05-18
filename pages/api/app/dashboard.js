@@ -40,15 +40,21 @@ export default async (req, res) => {
   // get USER
   const user = await User.findOne({ id: session.id })
 
-  // Buscar última afiliación (aprobada o pendiente) como fallback robusto para el plan
-  const lastAffiliation = await Affiliation.findOneLast({
+  // Última afiliación por fecha (findOneLast no ordenaba; evitaba tomar el plan correcto)
+  const affiliationList = await Affiliation.find({
     userId: session.id,
-    status: { $in: ["approved", "pending"] }
-  }).catch(() => null)
+    status: { $in: ["approved", "pending"] },
+  }).catch(() => [])
 
-  const userPlan = (user.plan && user.plan !== "default")
-    ? user.plan
-    : (lastAffiliation && lastAffiliation.plan ? lastAffiliation.plan.id : "default")
+  const sortedAff =
+    Array.isArray(affiliationList) && affiliationList.length
+      ? [...affiliationList].sort(
+          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
+        )
+      : []
+  const lastAffiliation = sortedAff[0] || null
+
+  const userPlan = lib.resolveUserPlanId(user, lastAffiliation)
 
   let directs = await User.find({ parentId: user.id })
 
