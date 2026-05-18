@@ -1,7 +1,7 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig } = db
+const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig, Affiliation } = db
 const { error, success, acum, midd,model } = lib
 
 const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'address', 'rank', 'points', 'parentId', 'total_points']
@@ -39,6 +39,16 @@ export default async (req, res) => {
   
   // get USER
   const user = await User.findOne({ id: session.id })
+
+  // Buscar última afiliación aprobada como fallback robusto para el plan
+  const lastApprovedAffiliation = await Affiliation.findOneLast({
+    userId: session.id,
+    status: "approved"
+  }).catch(() => null)
+
+  const userPlan = (user.plan && user.plan !== "default")
+    ? user.plan
+    : (lastApprovedAffiliation && lastApprovedAffiliation.plan ? lastApprovedAffiliation.plan.id : "default")
 
   let directs = await User.find({ parentId: user.id })
 
@@ -97,7 +107,7 @@ export default async (req, res) => {
     affiliated: user.affiliated,
     _activated: user._activated,
     activated:  user.activated,
-    plan:       user.plan,
+    plan:       userPlan,
     country:    user.country,
     photo:      user.photo, 
     tree:       user.tree,

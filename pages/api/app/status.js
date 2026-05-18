@@ -1,7 +1,7 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Tree } = db
+const { User, Session, Tree, Affiliation } = db
 const { error, success, midd, map } = lib
 
 
@@ -35,7 +35,7 @@ export default async (req, res) => {
   if(!session) return res.json(error('invalid session'))
 
   // get USER
-  const user = await User.findOne({ id: session.userId })
+  const user = await User.findOne({ id: session.id || session.userId })
 
   // get team
   tree = await Tree.find({})
@@ -52,6 +52,16 @@ export default async (req, res) => {
 
   if(user.activated) activateds--
 
+  // Buscar última afiliación aprobada como fallback robusto para el plan
+  const lastApprovedAffiliation = await Affiliation.findOneLast({
+    userId: user.id,
+    status: "approved"
+  }).catch(() => null)
+
+  const userPlan = (user.plan && user.plan !== "default")
+    ? user.plan
+    : (lastApprovedAffiliation && lastApprovedAffiliation.plan ? lastApprovedAffiliation.plan.id : "default")
+
   // response
   return res.json(success({
     name:            user.name,
@@ -60,7 +70,7 @@ export default async (req, res) => {
     activated:       user.activated,
     date:            user.date,
     affiliationDate: user.affiliationDate,
-    plan:            user.plan,
+    plan:            userPlan,
     country:         user.country,
     photo:           user.photo,
 
