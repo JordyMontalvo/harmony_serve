@@ -3,14 +3,14 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 
 /**
- * Cálculo de rangos del periodo (PP/PG/directos) — no usa rank_max_history.
- * Carga en runtime con eval('require') para que Webpack/Next 9 no intente empaquetar ../db (fallaba con 404 en la ruta).
+ * Cálculo de rangos del periodo (PP/PG/directos) — empaquetado en serve (Heroku).
+ * eval('require') evita que Webpack/Next 9 resuelva el módulo en build time.
  */
 function loadDbRankHarmony() {
   const dynamicRequire = eval("require")
   const candidates = [
-    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
-    path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
+    path.join(process.cwd(), "components", "harmony-ranks", "rank-calculation-harmony.js"),
+    path.join(__dirname, "../../../components/harmony-ranks/rank-calculation-harmony.js"),
   ]
   for (const p of candidates) {
     try {
@@ -19,8 +19,8 @@ function loadDbRankHarmony() {
       /* siguiente ruta */
     }
   }
-  return dynamicRequire(
-    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js")
+  throw new Error(
+    "rank-calculation-harmony no encontrado en serve/components/harmony-ranks"
   )
 }
 
@@ -451,6 +451,7 @@ export default async (req, res) => {
     const { action } = req.body
 
     if (action == "new") {
+      try {
       console.log("new ...")
 
       const users = await User.find({ tree: true })
@@ -458,6 +459,10 @@ export default async (req, res) => {
 
       tree.forEach((node) => {
         const user = users.find((e) => e.id == node.id)
+        if (!user) {
+          console.warn("[closeds] nodo sin usuario en tree:", node.id)
+          return
+        }
 
         node.parentId = user.parentId
         node.plan = user.plan
@@ -545,6 +550,12 @@ export default async (req, res) => {
       const activations = await Activation.find({ closed: false })
 
       return res.json(success({ tree, affiliations, activations }))
+      } catch (err) {
+        console.error("[admin/closeds POST new]", err)
+        return res
+          .status(500)
+          .json(lib.error(err.message || String(err)))
+      }
     }
 
     if (action == "save") {

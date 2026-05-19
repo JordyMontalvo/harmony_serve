@@ -1,14 +1,13 @@
 /**
- * Harmony rank helpers for admin (p. ej. reportes). El cierre mensual usa
- * `db/rank-calculation-harmony.js` para rangos del periodo (PP/PG/directos).
+ * Harmony rank helpers (admin/reportes). Rangos del periodo en
+ * `components/harmony-ranks/` (mismo repo serve, despliegue Heroku).
  */
 const path = require("path")
 
 function loadDbRankHarmony() {
   const candidates = [
-    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
-    path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
-    path.join(__dirname, "..", "..", "db", "rank-calculation-harmony.js"),
+    path.join(process.cwd(), "components", "harmony-ranks", "rank-calculation-harmony.js"),
+    path.join(__dirname, "harmony-ranks", "rank-calculation-harmony.js"),
   ]
   for (const p of candidates) {
     try {
