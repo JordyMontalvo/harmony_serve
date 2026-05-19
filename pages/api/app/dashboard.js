@@ -55,6 +55,12 @@ export default async (req, res) => {
     plans,
     lastAffiliation
   )
+  const membershipName = lib.membershipNameForUser(
+    user,
+    userPlan,
+    plans,
+    lastAffiliation
+  )
 
 
   let directs = await User.find({ parentId: user.id })
@@ -112,6 +118,7 @@ export default async (req, res) => {
     activated:  user.activated,
     plan:       userPlan,
     planLabel,
+    membershipName,
     userPlanRaw: user.plan,
     country:    user.country,
     photo:      user.photo, 

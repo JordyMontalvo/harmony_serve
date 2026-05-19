@@ -32,12 +32,27 @@ export default async (req, res) => {
     )
     const planRaw = lib.resolveUserPlanId(user, lastAffiliation, catalog)
     const planResolved = lib.finalizePlanWithGuesses(planRaw, user, catalog)
+    const planLabel = lib.resolvePlanLabelForUser(
+      user,
+      planResolved,
+      catalog,
+      lastAffiliation
+    )
+    const membershipName = lib.membershipNameForUser(
+      user,
+      planResolved,
+      catalog,
+      lastAffiliation
+    )
 
     return res.json(success({
       affiliated: user.affiliated,
      _activated:  user._activated,
       activated:  user.activated,
       plan:       planResolved,
+      planLabel,
+      membershipName,
+      userPlanRaw: user.plan,
       country:    user.country,
       photo:      user.photo,
       tree:       user.tree,

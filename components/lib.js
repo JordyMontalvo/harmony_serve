@@ -84,9 +84,12 @@ class Lib {
 
   /** Misma lógica que Harmony-admin Users.vue getPlanLabel */
   adminPlanLabel(val) {
-    if (!val) return "";
+    if (!val || this.planLooksUnset(val)) return "";
     const id = typeof val === "object" ? val.id || val.plan_id : val;
     const name = typeof val === "object" ? val.name : undefined;
+    if (id != null && this.planLooksUnset(id)) {
+      if (!name || String(name).trim() === "") return "";
+    }
 
     if (
       id === "basic" ||
@@ -256,9 +259,45 @@ class Lib {
         if (admin) return admin;
         return this.planDisplayLabel(guessed, plansCatalog);
       }
+      if (user.n != null && user.n !== "") {
+        const byN = plansCatalog.find(
+          (p) => p && Number(p.n) === Number(user.n)
+        );
+        if (byN) {
+          const admin = this.adminPlanLabel(byN.id || byN);
+          if (admin) return admin;
+        }
+      }
     }
 
     return "SIN MEMBRESÍA";
+  }
+
+  /** Nombre listo para UI (dashboard); nunca devuelve SIN MEMBRESÍA si hay plan en BD. */
+  membershipNameForUser(user, resolvedPlanId, plansCatalog, lastAffiliationRecord) {
+    const lbl = this.resolvePlanLabelForUser(
+      user,
+      resolvedPlanId,
+      plansCatalog,
+      lastAffiliationRecord
+    );
+    if (lbl && lbl !== "SIN MEMBRESÍA") return lbl;
+    if (user && user.affiliated && Array.isArray(plansCatalog)) {
+      const id = resolvedPlanId && !this.planLooksUnset(resolvedPlanId)
+        ? resolvedPlanId
+        : this.rawPlanId(user.plan);
+      if (id && !this.planLooksUnset(id)) {
+        const row = plansCatalog.find(
+          (p) =>
+            p &&
+            this.normalizePlanKey(p.id) === this.normalizePlanKey(id)
+        );
+        if (row && row.name) return String(row.name).toUpperCase();
+        const admin = this.adminPlanLabel(id);
+        if (admin) return admin;
+      }
+    }
+    return lbl || "SIN MEMBRESÍA";
   }
 
   /** Etiqueta visible alineada con Harmony-admin Users.getPlanLabel */
