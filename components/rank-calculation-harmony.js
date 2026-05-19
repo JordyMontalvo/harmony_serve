@@ -56,12 +56,27 @@ function calcularPP(uh) {
   return Number(uh.puntos_productos || 0) + Number(uh.puntos_afiliacion || 0)
 }
 
+function isActivoDbFlag(value) {
+  return (
+    value === true ||
+    value === 1 ||
+    value === "true" ||
+    value === "TRUE" ||
+    value === "1"
+  )
+}
+
+function isUsuarioActivoHarmony(uh) {
+  if (!uh) return false
+  return isActivoDbFlag(uh.activated) || calcularPP(uh) >= 180
+}
+
 function contarActivosDirectos({ directos }, activosList) {
   const byId = new Map((activosList || []).map((a) => [a.id, a]))
   let n = 0
   for (const did of directos || []) {
     const a = byId.get(did)
-    if (a && calcularPP(a) >= 180) n += 1
+    if (a && isUsuarioActivoHarmony(a)) n += 1
   }
   return n
 }
@@ -104,5 +119,6 @@ function calcularRangosTodos(usuariosHarmony, usersOrLogs) {
 module.exports = {
   calcularPP,
   calcularRangosTodos,
+  isUsuarioActivoHarmony,
   contarActivosDirectos,
 }

@@ -169,6 +169,7 @@ function buildHarmonyUsuarioListFromTree() {
     puntos_afiliacion: 0,
     total_points: puntajeGrupalSinPropio(node),
     directos: node.childs || [],
+    activated: isTrueDbFlag(node.activated_flag),
   }))
 }
 
@@ -186,7 +187,7 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
     const rid = rankIdsPorUsuario[node.id] || 0
 
     let rankKey = "none"
-    if (pp < 180) rankKey = "none"
+    if (pp < ACTIVE_POINTS_THRESHOLD || !isUserFullyActive(node)) rankKey = "none"
     else if (!rid) rankKey = "SIN_RANGO"
     else rankKey = RANGO_ID_TO_KEY[rid] || "SIN_RANGO"
 
@@ -249,15 +250,31 @@ function isTrueDbFlag(value) {
 }
 
 function hasActivationPoints(record) {
-  return Number(record?.points || record?.puntos_productos || 0) >= ACTIVE_POINTS_THRESHOLD
+  return (
+    Number(record?.points || record?.puntos_productos || 0) >=
+    ACTIVE_POINTS_THRESHOLD
+  )
+}
+
+function hasActiveMembershipFlag(record) {
+  return (
+    isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED)
+  )
+}
+
+/**
+ * Activo en cierre: al menos uno — activated (sin _activated) O PP >= 180.
+ */
+function isUserFullyActive(record) {
+  return hasActiveMembershipFlag(record) || hasActivationPoints(record)
 }
 
 function isFullActivated(record) {
-  return isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED) || hasActivationPoints(record)
+  return isUserFullyActive(record)
 }
 
 function isActiveForClosure(record) {
-  return isFullActivated(record) || isTrueDbFlag(record?._activated) || isTrueDbFlag(record?.active)
+  return isUserFullyActive(record)
 }
 
 function buildQualificationPayments(node) {
@@ -349,7 +366,7 @@ function pay_residual(id, n, user) {
   let _id = node.parent
 
   if (isActiveForClosure(node)) {
-    const rr = isFullActivated(node) ? 1 : 0.5
+    const rr = 1
     const pct = getPercentageForLevel(n + 1)
 
     if (node.levels > n && pct > 0 && user.points) {
@@ -416,7 +433,9 @@ export default async (req, res) => {
         node.dni = user.dni
         node.name = user.name + " " + user.lastName
         node.ACTIVATED = isTrueDbFlag(user.ACTIVATED)
-        node.activated = isFullActivated(user)
+        node.activated_flag =
+          isTrueDbFlag(user.activated) || isTrueDbFlag(user.ACTIVATED)
+        node.activated = isUserFullyActive(user)
         node._activated = isTrueDbFlag(user._activated)
         node.active = isActiveForClosure(node)
         node.points = Number(user.points)
