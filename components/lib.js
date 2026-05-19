@@ -70,12 +70,49 @@ class Lib {
         planVal.id !== undefined && planVal.id !== null
           ? planVal.id
           : planVal.plan_id;
-      if (rid == null || rid === "") return true;
+      if (rid == null || rid === "") {
+        const nm = planVal.name || planVal.label;
+        if (nm != null && String(nm).trim() !== "") return false;
+        return true;
+      }
       const s = String(rid).trim().toLowerCase();
       return s === "default" || s === "none" || s === "null" || s === "undefined";
     }
     const s = String(planVal).trim().toLowerCase();
     return s === "default" || s === "none" || s === "null" || s === "undefined";
+  }
+
+  /** Misma lógica que Harmony-admin Users.vue getPlanLabel */
+  adminPlanLabel(val) {
+    if (!val) return "";
+    const id = typeof val === "object" ? val.id || val.plan_id : val;
+    const name = typeof val === "object" ? val.name : undefined;
+
+    if (
+      id === "basic" ||
+      name === "DISTRIBUIDOR" ||
+      name === "EJECUTIVO" ||
+      name === "Ejecutivo"
+    ) {
+      return "DISTRIBUIDOR";
+    }
+    if (
+      id === "standard" ||
+      id === "business" ||
+      name === "EMPRESARIO" ||
+      name === "Empresario" ||
+      name === "Distribuidor" ||
+      name === "DISTRIBUIDOR (ANTIGUO)"
+    ) {
+      return "EMPRESARIO";
+    }
+    if (id === "master" || name === "MASTER" || name === "Master") return "MASTER";
+    if (id === "vip" || name === "VIP" || name === "Vip") return "VIP";
+
+    if (typeof val === "object") {
+      return (val.name || "").toUpperCase();
+    }
+    return String(val).toUpperCase();
   }
 
   rawPlanId(planField) {
@@ -111,13 +148,38 @@ class Lib {
    */
   inferPlanFromAffiliationPoints(user, plansCatalog) {
     if (!user || !Array.isArray(plansCatalog)) return null;
+
+    if (user.n != null && user.n !== "") {
+      const n = Number(user.n);
+      if (Number.isFinite(n)) {
+        const byN = plansCatalog.find((p) => p && Number(p.n) === n);
+        if (byN && byN.id) return String(byN.id);
+      }
+    }
+
     const pts = Number(user.affiliation_points);
     if (!Number.isFinite(pts) || pts <= 0) return null;
+
     for (const p of plansCatalog) {
       if (!p || this.planLooksUnset(p.id)) continue;
       const ap = Number(p.affiliation_points);
       if (Number.isFinite(ap) && ap === pts) return String(p.id);
     }
+
+    let best = null;
+    let bestDiff = Infinity;
+    for (const p of plansCatalog) {
+      if (!p || this.planLooksUnset(p.id)) continue;
+      const ap = Number(p.affiliation_points);
+      if (!Number.isFinite(ap)) continue;
+      const diff = Math.abs(ap - pts);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = p;
+      }
+    }
+    if (best && best.id && bestDiff <= 8) return String(best.id);
+
     return null;
   }
 
@@ -168,11 +230,45 @@ class Lib {
     return null;
   }
 
+  /**
+   * Etiqueta final para UI: prueba plan crudo del usuario, id resuelto y afiliación
+   * (misma prioridad que ve el admin en la tabla de usuarios).
+   */
+  resolvePlanLabelForUser(user, resolvedPlanId, plansCatalog, lastAffiliationRecord) {
+    const candidates = [
+      user && user.plan,
+      resolvedPlanId,
+      lastAffiliationRecord && lastAffiliationRecord.plan,
+    ];
+
+    for (const c of candidates) {
+      const admin = this.adminPlanLabel(c);
+      if (admin) return admin;
+      if (c == null || c === "" || this.planLooksUnset(c)) continue;
+      const lbl = this.planDisplayLabel(c, plansCatalog);
+      if (lbl && lbl !== "SIN MEMBRESÍA") return lbl;
+    }
+
+    if (user && Array.isArray(plansCatalog) && plansCatalog.length) {
+      const guessed = this.inferPlanFromAffiliationPoints(user, plansCatalog);
+      if (guessed) {
+        const admin = this.adminPlanLabel(guessed);
+        if (admin) return admin;
+        return this.planDisplayLabel(guessed, plansCatalog);
+      }
+    }
+
+    return "SIN MEMBRESÍA";
+  }
+
   /** Etiqueta visible alineada con Harmony-admin Users.getPlanLabel */
   planDisplayLabel(planVal, plansCatalog) {
-    if (planVal == null || planVal === "" || this.planLooksUnset(planVal)) {
-      return "SIN MEMBRESÍA";
-    }
+    if (planVal == null || planVal === "") return "SIN MEMBRESÍA";
+
+    const adminFirst = this.adminPlanLabel(planVal);
+    if (adminFirst) return adminFirst;
+
+    if (this.planLooksUnset(planVal)) return "SIN MEMBRESÍA";
 
     let id =
       typeof planVal === "object" ? planVal.id || planVal.plan_id : planVal;
@@ -200,6 +296,7 @@ class Lib {
 
     if (
       idNorm === "basic" ||
+      idNorm === "distribuidor" ||
       nameNorm === "distribuidor" ||
       nameNorm === "ejecutivo"
     ) {

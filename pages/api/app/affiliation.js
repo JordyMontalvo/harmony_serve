@@ -149,7 +149,12 @@ export default async (req, res) => {
     user,
     catalog
   );
-  const planLabel = lib.planDisplayLabel(resolvedPlanId, catalog);
+  const planLabel = lib.resolvePlanLabelForUser(
+    user,
+    resolvedPlanId,
+    catalog,
+    affiliation
+  );
 
   // Filtrar planes según afiliación existente (Mostrar solo planes superiores)
   let filteredPlans = plans;
