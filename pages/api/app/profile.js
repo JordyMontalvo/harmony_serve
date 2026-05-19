@@ -1,7 +1,7 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session } = db
+const { User, Session, Affiliation } = db
 const { error, success, midd } = lib
 
 
@@ -16,21 +16,25 @@ export default async (req, res) => {
 
   // get user
   const user = await User.findOne({ id: session.id })
+  if (!user) return res.json(error("User not found"))
 
-
-  if(req.method == 'GET') {
-
-    const bank         = user.bank         ? user.bank         : null
+  if (req.method == "GET") {
+    const bank = user.bank ? user.bank : null
     const account_type = user.account_type ? user.account_type : null
-    const account      = user.account      ? user.account      : null
-    const ibk          = user.ibk          ? user.ibk          : null
+    const account = user.account ? user.account : null
+    const ibk = user.ibk ? user.ibk : null
 
-    // response
+    const lastAffiliation = await lib.pickAffiliationForPlanResolution(
+      Affiliation,
+      user.id
+    )
+    const planResolved = lib.resolveUserPlanId(user, lastAffiliation)
+
     return res.json(success({
       affiliated: user.affiliated,
      _activated:  user._activated,
       activated:  user.activated,
-      plan:       user.plan,
+      plan:       planResolved,
       country:    user.country,
       photo:      user.photo,
       tree:       user.tree,

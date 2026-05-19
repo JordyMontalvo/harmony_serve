@@ -96,8 +96,7 @@ export default async (req, res) => {
     user,
     plans,
     products,
-    affiliation,
-    affiliations,
+    allUserAffiliations,
     transactions,
     _transactions
   ] = await Promise.all([
@@ -113,16 +112,8 @@ export default async (req, res) => {
       console.error('[Affiliation API] Error loading products:', err);
       return [];
     }),
-    Affiliation.findOneLast({
-      userId: session.id,
-      status: { $in: ["pending", "approved"] },
-    }).catch(err => {
-      console.error('[Affiliation API] Error loading affiliation:', err);
-      return null;
-    }),
     Affiliation.find({
-      userId: session.id,
-      status: "approved",
+      $or: [{ userId: session.id }, { user_id: session.id }],
     }).catch(err => {
       console.error('[Affiliation API] Error loading affiliations:', err);
       return [];
@@ -148,11 +139,16 @@ export default async (req, res) => {
     return res.json(error("User not found"));
   }
 
+  const affiliation = lib.pickBestAffiliationFromList(allUserAffiliations || []);
+  const affiliations = (allUserAffiliations || []).filter(
+    (a) => String(a.status || "").toLowerCase() === "approved"
+  );
+  const resolvedPlanId = lib.resolveUserPlanId(user, affiliation);
+
   // Filtrar planes según afiliación existente (Mostrar solo planes superiores)
   let filteredPlans = plans;
-  if (affiliation && (affiliation.status == "approved" || user.plan)) {
-    // Identificar el plan actual (usar el de la afiliación o el del usuario)
-    const currentPlanId = affiliation.plan ? affiliation.plan.id : user.plan;
+  if (resolvedPlanId && resolvedPlanId !== "default") {
+    const currentPlanId = resolvedPlanId;
 
     if (currentPlanId == "basic") { // Distribuidor
       // Mostrar solo Empresario, Master, VIP (índices > 0)
@@ -162,7 +158,7 @@ export default async (req, res) => {
       // Mostrar solo Master, VIP (índices > 1)
       filteredPlans = plans.filter((_, index) => index > 1);
     }
-    else if (currentPlanId == "master") { // Master
+    else if (currentPlanId == "master" || currentPlanId == "empresario") { // Master
       // Mostrar solo VIP (índices > 2, asumiendo que master es el 3ro)
       filteredPlans = plans.filter((_, index) => index > 2);
     }
@@ -194,10 +190,10 @@ export default async (req, res) => {
       success({
         name: user.name,
         lastName: user.lastName,
-        affiliated: user.affiliated || (affiliation && affiliation.status === 'approved'),
+        affiliated: user.affiliated || (affiliation && String(affiliation.status || "").toLowerCase() === "approved"),
         _activated: user._activated,
         activated: user.activated,
-        plan: (user.plan && user.plan !== "default") ? user.plan : (affiliation && affiliation.plan ? affiliation.plan.id : "default"),
+        plan: resolvedPlanId,
         country: user.country,
         photo: user.photo,
         tree: user.tree,

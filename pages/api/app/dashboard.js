@@ -39,20 +39,12 @@ export default async (req, res) => {
   
   // get USER
   const user = await User.findOne({ id: session.id })
+  if (!user) return res.json(error("User not found"))
 
-  // Última afiliación por fecha (findOneLast no ordenaba; evitaba tomar el plan correcto)
-  const affiliationList = await Affiliation.find({
-    userId: session.id,
-    status: { $in: ["approved", "pending"] },
-  }).catch(() => [])
-
-  const sortedAff =
-    Array.isArray(affiliationList) && affiliationList.length
-      ? [...affiliationList].sort(
-          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
-        )
-      : []
-  const lastAffiliation = sortedAff[0] || null
+  const lastAffiliation = await lib.pickAffiliationForPlanResolution(
+    Affiliation,
+    user.id
+  )
 
   const userPlan = lib.resolveUserPlanId(user, lastAffiliation)
 

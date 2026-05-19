@@ -36,6 +36,7 @@ export default async (req, res) => {
 
   // get USER
   const user = await User.findOne({ id: session.id || session.userId })
+  if (!user) return res.json(error("User not found"))
 
   // get team
   tree = await Tree.find({})
@@ -52,18 +53,10 @@ export default async (req, res) => {
 
   if(user.activated) activateds--
 
-  const affiliationList = await Affiliation.find({
-    userId: user.id,
-    status: { $in: ["approved", "pending"] },
-  }).catch(() => [])
-
-  const sortedAff =
-    Array.isArray(affiliationList) && affiliationList.length
-      ? [...affiliationList].sort(
-          (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
-        )
-      : []
-  const lastAffiliation = sortedAff[0] || null
+  const lastAffiliation = await lib.pickAffiliationForPlanResolution(
+    Affiliation,
+    user.id
+  )
 
   const userPlan = lib.resolveUserPlanId(user, lastAffiliation)
 

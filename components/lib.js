@@ -66,7 +66,7 @@ class Lib {
   resolveUserPlanId(user, lastAffiliationRecord) {
     if (!user) return "default";
     const up = user.plan;
-    if (up && up !== "default") {
+    if (up != null && up !== "" && up !== "default") {
       if (typeof up === "object" && up !== null) {
         const id = up.id || up.plan_id;
         return id ? String(id) : "default";
@@ -80,6 +80,31 @@ class Lib {
       return id ? String(id) : "default";
     }
     return ap ? String(ap) : "default";
+  }
+
+  /**
+   * De todas las afiliaciones del usuario en memoria, elige la mejor para inferir plan:
+   * excluye rechazadas; prioriza aprobadas; si no hay, pendientes; orden por fecha.
+   */
+  pickBestAffiliationFromList(list) {
+    if (!Array.isArray(list) || !list.length) return null;
+    const norm = (s) => String(s || "").toLowerCase().trim();
+    const bad = new Set(["rejected", "cancelled", "canceled"]);
+    const viable = list.filter((a) => a && a.plan && !bad.has(norm(a.status)));
+    if (!viable.length) return null;
+    const approved = viable.filter((a) => norm(a.status) === "approved");
+    const pending = viable.filter((a) => norm(a.status) === "pending");
+    const pool = approved.length ? approved : pending.length ? pending : viable;
+    pool.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    return pool[0] || null;
+  }
+
+  /** Carga afiliaciones por userId o user_id (registros viejos) y elige la mejor fila. */
+  async pickAffiliationForPlanResolution(Affiliation, userId) {
+    const list = await Affiliation.find({
+      $or: [{ userId: userId }, { user_id: userId }],
+    }).catch(() => []);
+    return this.pickBestAffiliationFromList(list);
   }
 
   // Actualiza total_points de un nodo y propaga hacia arriba
