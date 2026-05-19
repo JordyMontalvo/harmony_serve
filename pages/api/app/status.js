@@ -60,8 +60,9 @@ export default async (req, res) => {
 
   const catalog = await Plan.find({}).catch(() => [])
 
-  const userPlanRaw = lib.resolveUserPlanId(user, lastAffiliation)
+  const userPlanRaw = lib.resolveUserPlanId(user, lastAffiliation, catalog)
   const userPlan = lib.finalizePlanWithGuesses(userPlanRaw, user, catalog)
+  const planLabel = lib.planDisplayLabel(userPlan, catalog)
 
   // response
   return res.json(success({
@@ -72,6 +73,7 @@ export default async (req, res) => {
     date:            user.date,
     affiliationDate: user.affiliationDate,
     plan:            userPlan,
+    planLabel,
     country:         user.country,
     photo:           user.photo,
 

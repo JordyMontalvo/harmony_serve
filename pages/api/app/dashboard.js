@@ -47,8 +47,9 @@ export default async (req, res) => {
     sessionUserId
   )
 
-  let userPlan = lib.resolveUserPlanId(user, lastAffiliation)
+  let userPlan = lib.resolveUserPlanId(user, lastAffiliation, plans)
   userPlan = lib.finalizePlanWithGuesses(userPlan, user, plans)
+  const planLabel = lib.planDisplayLabel(userPlan, plans)
 
 
   let directs = await User.find({ parentId: user.id })
@@ -105,6 +106,7 @@ export default async (req, res) => {
     _activated: user._activated,
     activated:  user.activated,
     plan:       userPlan,
+    planLabel,
     country:    user.country,
     photo:      user.photo, 
     tree:       user.tree,

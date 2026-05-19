@@ -121,16 +121,189 @@ class Lib {
     return null;
   }
 
+  normalizePlanKey(val) {
+    return String(val || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  planNameFromField(planField) {
+    if (planField == null || planField === "") return null;
+    if (
+      typeof planField === "object" &&
+      planField !== null &&
+      !(planField instanceof Date)
+    ) {
+      const n = planField.name || planField.label;
+      return n != null && String(n).trim() !== "" ? String(n).trim() : null;
+    }
+    return null;
+  }
+
+  findPlanInCatalog(plansCatalog, hints = {}) {
+    if (!Array.isArray(plansCatalog) || !plansCatalog.length) return null;
+    const norm = (v) => this.normalizePlanKey(v);
+
+    if (hints.id != null && !this.planLooksUnset(hints.id)) {
+      const row = plansCatalog.find((p) => p && norm(p.id) === norm(hints.id));
+      if (row) return row;
+    }
+
+    if (hints.name) {
+      const want = norm(hints.name);
+      const byName = plansCatalog.find((p) => p && norm(p.name) === want);
+      if (byName) return byName;
+    }
+
+    const pts = Number(hints.affiliationPoints);
+    if (Number.isFinite(pts) && pts > 0) {
+      const byPts = plansCatalog.find(
+        (p) => p && Number(p.affiliation_points) === pts
+      );
+      if (byPts) return byPts;
+    }
+
+    return null;
+  }
+
+  /** Etiqueta visible alineada con Harmony-admin Users.getPlanLabel */
+  planDisplayLabel(planVal, plansCatalog) {
+    if (planVal == null || planVal === "" || this.planLooksUnset(planVal)) {
+      return "SIN MEMBRESÍA";
+    }
+
+    let id =
+      typeof planVal === "object" ? planVal.id || planVal.plan_id : planVal;
+    let name = typeof planVal === "object" ? planVal.name : null;
+
+    const hintName =
+      name ||
+      (typeof planVal === "string" && !this.planLooksUnset(planVal)
+        ? planVal
+        : null);
+
+    const row = this.findPlanInCatalog(plansCatalog, {
+      id,
+      name: hintName,
+      affiliationPoints:
+        typeof planVal === "object" ? planVal.affiliation_points : null,
+    });
+    if (row) {
+      id = row.id;
+      name = row.name;
+    }
+
+    const idNorm = this.normalizePlanKey(id);
+    const nameNorm = this.normalizePlanKey(name);
+
+    if (
+      idNorm === "basic" ||
+      nameNorm === "distribuidor" ||
+      nameNorm === "ejecutivo"
+    ) {
+      return "DISTRIBUIDOR";
+    }
+    if (
+      idNorm === "standard" ||
+      idNorm === "business" ||
+      nameNorm === "empresario" ||
+      nameNorm === "distribuidorantiguo"
+    ) {
+      return "EMPRESARIO";
+    }
+    if (idNorm === "master" || nameNorm === "master") return "MASTER";
+    if (idNorm === "vip" || nameNorm === "vip") return "VIP";
+    if (idNorm === "early") return "CLIENTE PREFERENTE";
+
+    if (name) return String(name).toUpperCase();
+    if (id && !this.planLooksUnset(id)) return String(id).toUpperCase();
+    return "SIN MEMBRESÍA";
+  }
+
+  resolvePlanFieldToId(planField, affiliationPoints, plansCatalog) {
+    const id = this.rawPlanId(planField);
+    if (id && !this.planLooksUnset(id)) {
+      if (Array.isArray(plansCatalog) && plansCatalog.length) {
+        const row = this.findPlanInCatalog(plansCatalog, {
+          id,
+          affiliationPoints,
+        });
+        if (row && row.id) return String(row.id);
+      }
+      return String(id);
+    }
+
+    const nm = this.planNameFromField(planField);
+    if (nm && Array.isArray(plansCatalog) && plansCatalog.length) {
+      const row = this.findPlanInCatalog(plansCatalog, {
+        name: nm,
+        affiliationPoints,
+      });
+      if (row && row.id) return String(row.id);
+    }
+
+    if (nm) {
+      const n = this.normalizePlanKey(nm);
+      if (n === "distribuidor" || n === "ejecutivo") return "basic";
+      if (n === "empresario") return "business";
+      if (n === "master") return "master";
+      if (n === "vip") return "vip";
+    }
+
+    if (typeof planField === "string" && !this.planLooksUnset(planField)) {
+      const s = String(planField).trim();
+      if (Array.isArray(plansCatalog) && plansCatalog.length) {
+        const row = this.findPlanInCatalog(plansCatalog, {
+          id: s,
+          name: s,
+          affiliationPoints,
+        });
+        if (row && row.id) return String(row.id);
+      }
+      return s;
+    }
+
+    return null;
+  }
+
   /**
    * Id de plan homogéneo (string) desde usuario o última afiliación.
+   * Con catálogo: resuelve por nombre, id legacy o puntos de afiliación.
    */
-  resolveUserPlanId(user, lastAffiliationRecord) {
+  resolveUserPlanId(user, lastAffiliationRecord, plansCatalog = null) {
     if (!user) return "default";
-    const upId = this.rawPlanId(user.plan);
-    if (upId && !this.planLooksUnset(upId)) return String(upId);
 
-    let fromAff = this.affiliationDocPlanId(lastAffiliationRecord);
-    if (fromAff && !this.planLooksUnset(fromAff)) return String(fromAff);
+    const fromUser = this.resolvePlanFieldToId(
+      user.plan,
+      user.affiliation_points,
+      plansCatalog
+    );
+    if (fromUser && !this.planLooksUnset(fromUser)) return fromUser;
+
+    const affId = this.affiliationDocPlanId(lastAffiliationRecord);
+    if (affId && !this.planLooksUnset(affId)) {
+      if (Array.isArray(plansCatalog) && plansCatalog.length) {
+        const row = this.findPlanInCatalog(plansCatalog, { id: affId });
+        if (row && row.id) return String(row.id);
+      }
+      return String(affId);
+    }
+
+    if (lastAffiliationRecord && lastAffiliationRecord.plan) {
+      const affPts =
+        typeof lastAffiliationRecord.plan === "object" &&
+        lastAffiliationRecord.plan !== null
+          ? lastAffiliationRecord.plan.affiliation_points
+          : user.affiliation_points;
+      const fromAffPlan = this.resolvePlanFieldToId(
+        lastAffiliationRecord.plan,
+        affPts,
+        plansCatalog
+      );
+      if (fromAffPlan && !this.planLooksUnset(fromAffPlan)) return fromAffPlan;
+    }
 
     return "default";
   }

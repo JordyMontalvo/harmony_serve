@@ -30,7 +30,7 @@ export default async (req, res) => {
       Affiliation,
       user.id
     )
-    const planRaw = lib.resolveUserPlanId(user, lastAffiliation)
+    const planRaw = lib.resolveUserPlanId(user, lastAffiliation, catalog)
     const planResolved = lib.finalizePlanWithGuesses(planRaw, user, catalog)
 
     return res.json(success({
