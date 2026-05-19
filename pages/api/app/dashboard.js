@@ -32,21 +32,24 @@ export default async (req, res) => {
   // valid session
   session = await Session.findOne({ value: session })
   if(!session)  return res.json(error('invalid session'))
-    
-  // GET plans
+
+  const sessionUserId = session.id || session.userId
+  
+  // GET plans (antes para inferencia fallback)
   const plans = await Plan.find({}); // Traer todos los planes
   
-  
   // get USER
-  const user = await User.findOne({ id: session.id })
+  const user = await User.findOne({ id: sessionUserId })
   if (!user) return res.json(error("User not found"))
 
   const lastAffiliation = await lib.pickAffiliationForPlanResolution(
     Affiliation,
-    user.id
+    sessionUserId
   )
 
-  const userPlan = lib.resolveUserPlanId(user, lastAffiliation)
+  let userPlan = lib.resolveUserPlanId(user, lastAffiliation)
+  userPlan = lib.finalizePlanWithGuesses(userPlan, user, plans)
+
 
   let directs = await User.find({ parentId: user.id })
 
@@ -56,16 +59,12 @@ export default async (req, res) => {
   })
 
   const node = await Tree.findOne({ id: user.id })
-  console.log({ node })
 
-  const childs = node.childs
-  console.log({ childs })
+  const childs = node && Array.isArray(node.childs) ? node.childs : []
 
-  let frontals = await User.find({ id: { $in: childs } })
-  // frontals = frontals.filter(e => e.parentId != user.id)
-  console.log({ frontals })
-
-  // get transactions
+  let frontals = childs.length
+    ? await User.find({ id: { $in: childs } })
+    : []
   const transactions        = await Transaction.find({ user_id: user.id, virtual: {$in: [null, false]} })
   const virtualTransactions = await Transaction.find({ user_id: user.id, virtual:              true    })
 

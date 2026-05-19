@@ -1,7 +1,7 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Affiliation } = db
+const { User, Session, Affiliation, Plan } = db
 const { error, success, midd } = lib
 
 
@@ -15,7 +15,7 @@ export default async (req, res) => {
   if(!session) return res.json(error('invalid session'))
 
   // get user
-  const user = await User.findOne({ id: session.id })
+  const user = await User.findOne({ id: session.id || session.userId })
   if (!user) return res.json(error("User not found"))
 
   if (req.method == "GET") {
@@ -24,11 +24,14 @@ export default async (req, res) => {
     const account = user.account ? user.account : null
     const ibk = user.ibk ? user.ibk : null
 
+    const catalog = await Plan.find({}).catch(() => [])
+
     const lastAffiliation = await lib.pickAffiliationForPlanResolution(
       Affiliation,
       user.id
     )
-    const planResolved = lib.resolveUserPlanId(user, lastAffiliation)
+    const planRaw = lib.resolveUserPlanId(user, lastAffiliation)
+    const planResolved = lib.finalizePlanWithGuesses(planRaw, user, catalog)
 
     return res.json(success({
       affiliated: user.affiliated,

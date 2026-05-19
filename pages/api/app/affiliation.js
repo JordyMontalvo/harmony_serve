@@ -143,7 +143,11 @@ export default async (req, res) => {
   const affiliations = (allUserAffiliations || []).filter(
     (a) => String(a.status || "").toLowerCase() === "approved"
   );
-  const resolvedPlanId = lib.resolveUserPlanId(user, affiliation);
+  const resolvedPlanId = lib.finalizePlanWithGuesses(
+    lib.resolveUserPlanId(user, affiliation),
+    user,
+    plans || []
+  );
 
   // Filtrar planes según afiliación existente (Mostrar solo planes superiores)
   let filteredPlans = plans;

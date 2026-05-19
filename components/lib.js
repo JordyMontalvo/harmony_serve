@@ -59,27 +59,86 @@ class Lib {
     return ret;
   }
 
+  planLooksUnset(planVal) {
+    if (planVal == null || planVal === "") return true;
+    if (
+      typeof planVal === "object" &&
+      planVal !== null &&
+      !(planVal instanceof Date)
+    ) {
+      const rid =
+        planVal.id !== undefined && planVal.id !== null
+          ? planVal.id
+          : planVal.plan_id;
+      if (rid == null || rid === "") return true;
+      const s = String(rid).trim().toLowerCase();
+      return s === "default" || s === "none" || s === "null" || s === "undefined";
+    }
+    const s = String(planVal).trim().toLowerCase();
+    return s === "default" || s === "none" || s === "null" || s === "undefined";
+  }
+
+  rawPlanId(planField) {
+    if (planField == null || planField === "") return null;
+    if (typeof planField === "object" && planField !== null && !(planField instanceof Date)) {
+      const id = planField.id || planField.plan_id;
+      return id ? String(id) : null;
+    }
+    const str = String(planField).trim();
+    return str ? str : null;
+  }
+
+  /**
+   * Intenta obtener id de paquete desde documento afiliación (formas viejas/anidadas).
+   */
+  affiliationDocPlanId(aff) {
+    if (!aff) return null;
+    const fromNested = this.rawPlanId(aff.plan);
+    if (fromNested && !this.planLooksUnset(fromNested)) return fromNested;
+    const flat =
+      aff.planId ||
+      aff.plan_id ||
+      aff.selectedPlanId ||
+      aff.packId ||
+      (typeof aff.selectedPlan === "string" ? aff.selectedPlan : null);
+    const raw = this.rawPlanId(flat);
+    if (raw && !this.planLooksUnset(raw)) return raw;
+    return null;
+  }
+
+  /**
+   * Si el usuario tiene puntos de afiliación típicos de un paquete, infiere plan (BD sin campo plan).
+   */
+  inferPlanFromAffiliationPoints(user, plansCatalog) {
+    if (!user || !Array.isArray(plansCatalog)) return null;
+    const pts = Number(user.affiliation_points);
+    if (!Number.isFinite(pts) || pts <= 0) return null;
+    for (const p of plansCatalog) {
+      if (!p || this.planLooksUnset(p.id)) continue;
+      const ap = Number(p.affiliation_points);
+      if (Number.isFinite(ap) && ap === pts) return String(p.id);
+    }
+    return null;
+  }
+
   /**
    * Id de plan homogéneo (string) desde usuario o última afiliación.
-   * Evita quedarse en "default" cuando user.plan es objeto o la afiliación guarda plan embebido.
    */
   resolveUserPlanId(user, lastAffiliationRecord) {
     if (!user) return "default";
-    const up = user.plan;
-    if (up != null && up !== "" && up !== "default") {
-      if (typeof up === "object" && up !== null) {
-        const id = up.id || up.plan_id;
-        return id ? String(id) : "default";
-      }
-      return String(up);
-    }
-    if (!lastAffiliationRecord || !lastAffiliationRecord.plan) return "default";
-    const ap = lastAffiliationRecord.plan;
-    if (typeof ap === "object" && ap !== null) {
-      const id = ap.id || ap.plan_id;
-      return id ? String(id) : "default";
-    }
-    return ap ? String(ap) : "default";
+    const upId = this.rawPlanId(user.plan);
+    if (upId && !this.planLooksUnset(upId)) return String(upId);
+
+    let fromAff = this.affiliationDocPlanId(lastAffiliationRecord);
+    if (fromAff && !this.planLooksUnset(fromAff)) return String(fromAff);
+
+    return "default";
+  }
+
+  finalizePlanWithGuesses(userPlan, user, plansCatalog) {
+    if (!this.planLooksUnset(userPlan)) return userPlan;
+    const guessed = user && this.inferPlanFromAffiliationPoints(user, plansCatalog);
+    return guessed || "default";
   }
 
   /**
@@ -90,7 +149,18 @@ class Lib {
     if (!Array.isArray(list) || !list.length) return null;
     const norm = (s) => String(s || "").toLowerCase().trim();
     const bad = new Set(["rejected", "cancelled", "canceled"]);
-    const viable = list.filter((a) => a && a.plan && !bad.has(norm(a.status)));
+    const viable = list.filter((a) => {
+      if (!a || bad.has(norm(a.status))) return false;
+      const st = norm(a.status);
+      const hasPack =
+        Boolean(this.affiliationDocPlanId(a)) ||
+        (a.plan != null && a.plan !== "") ||
+        (typeof a.plan === "object" &&
+          a.plan !== null &&
+          Object.keys(a.plan).length > 0);
+      if (hasPack) return true;
+      return st === "approved" || st === "pending";
+    });
     if (!viable.length) return null;
     const approved = viable.filter((a) => norm(a.status) === "approved");
     const pending = viable.filter((a) => norm(a.status) === "pending");

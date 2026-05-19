@@ -1,7 +1,7 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Tree, Affiliation } = db
+const { User, Session, Tree, Affiliation, Plan } = db
 const { error, success, midd, map } = lib
 
 
@@ -58,7 +58,10 @@ export default async (req, res) => {
     user.id
   )
 
-  const userPlan = lib.resolveUserPlanId(user, lastAffiliation)
+  const catalog = await Plan.find({}).catch(() => [])
+
+  const userPlanRaw = lib.resolveUserPlanId(user, lastAffiliation)
+  const userPlan = lib.finalizePlanWithGuesses(userPlanRaw, user, catalog)
 
   // response
   return res.json(success({
