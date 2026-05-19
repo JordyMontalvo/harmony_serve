@@ -207,13 +207,13 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
       rango_calculado_id: rid || 0,
       rango_calculado_nombre: rangoCalculadoNombre,
       rango_guardado_cierre: node.rank,
-      pp_umbral_activacion_rango: 180,
+      pp_umbral_activacion_rango: ACTIVE_POINTS_THRESHOLD,
       niveles_residual_permitidos: node.levels,
-      /** Este afiliado es Platino+ → en la línea aplica compresión dinámica de residuales hacia arriba. */
       compresion_residual_activa: rankAllowsResidualDynamicCompression(node),
       puntos_propios_suma_activ_mas_afil:
         Number(node.points || 0) + Number(node.affiliation_points || 0),
       plan: node.plan || null,
+      ...closureActivoDetalle(node),
     }
   }
 }
@@ -267,6 +267,37 @@ function hasActiveMembershipFlag(record) {
  */
 function isUserFullyActive(record) {
   return hasActiveMembershipFlag(record) || hasActivationPoints(record)
+}
+
+/** Detalle de activación para tabla de cierre (admin). */
+function closureActivoDetalle(node) {
+  const pp = Number(node?.points || 0)
+  const flagAct = isTrueDbFlag(node?.activated_flag)
+  const ppOk = pp >= ACTIVE_POINTS_THRESHOLD
+  const activo = isUserFullyActive(node)
+  let motivo = "no"
+  if (flagAct && ppOk) motivo = "activated_y_pp"
+  else if (flagAct) motivo = "activated"
+  else if (ppOk) motivo = "pp"
+
+  let etiqueta = "Inactivo"
+  if (activo) {
+    if (flagAct && ppOk) etiqueta = "Activo (activated + ≥180)"
+    else if (flagAct) etiqueta = "Activo (activated)"
+    else etiqueta = "Activo (≥180 pts)"
+  }
+
+  return {
+    activo_cierre: activo,
+    activated_en_bd: flagAct,
+    _activated_en_bd: isTrueDbFlag(node?._activated),
+    pp_producto: pp,
+    cumple_pp_180: ppOk,
+    activo_motivo: motivo,
+    activo_etiqueta: etiqueta,
+    regla_activo:
+      "activated (sin _activated) o PP producto ≥ 180 — al menos uno",
+  }
 }
 
 function isFullActivated(record) {
