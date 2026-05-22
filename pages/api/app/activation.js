@@ -281,8 +281,9 @@ export default async (req, res) => {
     // save new activation
     const { Period } = db
     const period = await getOrCreateOpenPeriod(Period, new Date())
+    const activationId = rand()
     await Activation.insert({
-      id:     rand(),
+      id:     activationId,
       date:   new Date(),
       userId: user.id,
       products,
@@ -357,6 +358,6 @@ export default async (req, res) => {
     })
 
     // response
-    return res.json(success())
+    return res.json(success({ activation_id: activationId }))
   }
 }

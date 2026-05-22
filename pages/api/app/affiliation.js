@@ -342,8 +342,9 @@ export default async (req, res) => {
     }
 
     const period = await getOrCreateOpenPeriod(new Date());
+    const affiliationId = rand();
     await Affiliation.insert({
-      id: rand(),
+      id: affiliationId,
       date: new Date(),
       userId: user.id,
       products,
@@ -364,6 +365,6 @@ export default async (req, res) => {
       type,
     });
 
-    return res.json(success());
+    return res.json(success({ affiliation_id: affiliationId }));
   }
 };
