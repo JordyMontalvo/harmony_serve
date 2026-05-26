@@ -3,14 +3,14 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 
 /**
- * Cálculo de rangos del periodo (PP/PG/directos) — empaquetado en serve (Heroku).
- * eval('require') evita que Webpack/Next 9 resuelva el módulo en build time.
+ * Cálculo de rangos del periodo (PP/PG/directos) — no usa rank_max_history.
+ * Carga en runtime con eval('require') para que Webpack/Next 9 no intente empaquetar ../db (fallaba con 404 en la ruta).
  */
 function loadDbRankHarmony() {
   const dynamicRequire = eval("require")
   const candidates = [
-    path.join(process.cwd(), "components", "harmony-ranks", "rank-calculation-harmony.js"),
-    path.join(__dirname, "../../../components/harmony-ranks/rank-calculation-harmony.js"),
+    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
+    path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
   ]
   for (const p of candidates) {
     try {
@@ -19,8 +19,8 @@ function loadDbRankHarmony() {
       /* siguiente ruta */
     }
   }
-  throw new Error(
-    "rank-calculation-harmony no encontrado en serve/components/harmony-ranks"
+  return dynamicRequire(
+    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js")
   )
 }
 
@@ -169,7 +169,6 @@ function buildHarmonyUsuarioListFromTree() {
     puntos_afiliacion: 0,
     total_points: puntajeGrupalSinPropio(node),
     directos: node.childs || [],
-    activated: isTrueDbFlag(node.activated_flag),
   }))
 }
 
@@ -187,7 +186,7 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
     const rid = rankIdsPorUsuario[node.id] || 0
 
     let rankKey = "none"
-    if (pp < ACTIVE_POINTS_THRESHOLD || !isUserFullyActive(node)) rankKey = "none"
+    if (pp < 180) rankKey = "none"
     else if (!rid) rankKey = "SIN_RANGO"
     else rankKey = RANGO_ID_TO_KEY[rid] || "SIN_RANGO"
 
@@ -207,13 +206,13 @@ function applyHarmonyRanks(rankIdsPorUsuario, usuariosHarmonyList) {
       rango_calculado_id: rid || 0,
       rango_calculado_nombre: rangoCalculadoNombre,
       rango_guardado_cierre: node.rank,
-      pp_umbral_activacion_rango: ACTIVE_POINTS_THRESHOLD,
+      pp_umbral_activacion_rango: 180,
       niveles_residual_permitidos: node.levels,
+      /** Este afiliado es Platino+ → en la línea aplica compresión dinámica de residuales hacia arriba. */
       compresion_residual_activa: rankAllowsResidualDynamicCompression(node),
       puntos_propios_suma_activ_mas_afil:
         Number(node.points || 0) + Number(node.affiliation_points || 0),
       plan: node.plan || null,
-      ...closureActivoDetalle(node),
     }
   }
 }
@@ -250,62 +249,15 @@ function isTrueDbFlag(value) {
 }
 
 function hasActivationPoints(record) {
-  return (
-    Number(record?.points || record?.puntos_productos || 0) >=
-    ACTIVE_POINTS_THRESHOLD
-  )
-}
-
-function hasActiveMembershipFlag(record) {
-  return (
-    isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED)
-  )
-}
-
-/**
- * Activo en cierre: al menos uno — activated (sin _activated) O PP >= 180.
- */
-function isUserFullyActive(record) {
-  return hasActiveMembershipFlag(record) || hasActivationPoints(record)
-}
-
-/** Detalle de activación para tabla de cierre (admin). */
-function closureActivoDetalle(node) {
-  const pp = Number(node?.points || 0)
-  const flagAct = isTrueDbFlag(node?.activated_flag)
-  const ppOk = pp >= ACTIVE_POINTS_THRESHOLD
-  const activo = isUserFullyActive(node)
-  let motivo = "no"
-  if (flagAct && ppOk) motivo = "activated_y_pp"
-  else if (flagAct) motivo = "activated"
-  else if (ppOk) motivo = "pp"
-
-  let etiqueta = "Inactivo"
-  if (activo) {
-    if (flagAct && ppOk) etiqueta = "Activo (activated + ≥180)"
-    else if (flagAct) etiqueta = "Activo (activated)"
-    else etiqueta = "Activo (≥180 pts)"
-  }
-
-  return {
-    activo_cierre: activo,
-    activated_en_bd: flagAct,
-    _activated_en_bd: isTrueDbFlag(node?._activated),
-    pp_producto: pp,
-    cumple_pp_180: ppOk,
-    activo_motivo: motivo,
-    activo_etiqueta: etiqueta,
-    regla_activo:
-      "activated (sin _activated) o PP producto ≥ 180 — al menos uno",
-  }
+  return Number(record?.points || record?.puntos_productos || 0) >= ACTIVE_POINTS_THRESHOLD
 }
 
 function isFullActivated(record) {
-  return isUserFullyActive(record)
+  return isTrueDbFlag(record?.activated) || isTrueDbFlag(record?.ACTIVATED) || hasActivationPoints(record)
 }
 
 function isActiveForClosure(record) {
-  return isUserFullyActive(record)
+  return isFullActivated(record) || isTrueDbFlag(record?._activated) || isTrueDbFlag(record?.active)
 }
 
 function buildQualificationPayments(node) {
@@ -397,7 +349,7 @@ function pay_residual(id, n, user) {
   let _id = node.parent
 
   if (isActiveForClosure(node)) {
-    const rr = 1
+    const rr = isFullActivated(node) ? 1 : 0.5
     const pct = getPercentageForLevel(n + 1)
 
     if (node.levels > n && pct > 0 && user.points) {
@@ -451,7 +403,6 @@ export default async (req, res) => {
     const { action } = req.body
 
     if (action == "new") {
-      try {
       console.log("new ...")
 
       const users = await User.find({ tree: true })
@@ -459,19 +410,13 @@ export default async (req, res) => {
 
       tree.forEach((node) => {
         const user = users.find((e) => e.id == node.id)
-        if (!user) {
-          console.warn("[closeds] nodo sin usuario en tree:", node.id)
-          return
-        }
 
         node.parentId = user.parentId
         node.plan = user.plan
         node.dni = user.dni
         node.name = user.name + " " + user.lastName
         node.ACTIVATED = isTrueDbFlag(user.ACTIVATED)
-        node.activated_flag =
-          isTrueDbFlag(user.activated) || isTrueDbFlag(user.ACTIVATED)
-        node.activated = isUserFullyActive(user)
+        node.activated = isFullActivated(user)
         node._activated = isTrueDbFlag(user._activated)
         node.active = isActiveForClosure(node)
         node.points = Number(user.points)
@@ -550,12 +495,6 @@ export default async (req, res) => {
       const activations = await Activation.find({ closed: false })
 
       return res.json(success({ tree, affiliations, activations }))
-      } catch (err) {
-        console.error("[admin/closeds POST new]", err)
-        return res
-          .status(500)
-          .json(lib.error(err.message || String(err)))
-      }
     }
 
     if (action == "save") {

@@ -5,6 +5,48 @@ const { User, Session, Plan, Product, Affiliation, Office, Tree, Transaction, Pe
   db;
 const { error, success, midd, rand, acum } = lib;
 
+const RANK_POSITIONS = {
+  MILLONARIO: 1,
+  ORO: 2,
+  ESMERALDA: 3,
+  PLATINO: 4,
+  DIAMANTE: 5,
+  DIAMANTE_AZUL: 6,
+  DIAMANTE_EJECUTIVO: 7,
+  DOBLE_DIAMANTE: 8,
+  DIAMANTE_CORONA: 9,
+  TOP_HARMONY: 10,
+};
+
+function normalizeRankKey(rank) {
+  const key = String(rank || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!key || key === "NONE" || key === "NO_RANK" || key === "SINRANGO" || key === "ACTIVE") {
+    return "SIN_RANGO";
+  }
+  return key;
+}
+
+function rankPosition(rank) {
+  return RANK_POSITIONS[normalizeRankKey(rank)] || 0;
+}
+
+function isRankPlatinoOrHigher(rank, maxRank) {
+  const pos = Math.max(rankPosition(rank), rankPosition(maxRank));
+  return pos >= RANK_POSITIONS.PLATINO;
+}
+
+function isPackageMigration(user) {
+  if (!user || !user.affiliated) return false;
+  const planId = user.plan;
+  return Boolean(planId && planId !== "default");
+}
+
 let tree;
 
 const MONTHS_ES = [
@@ -96,7 +138,8 @@ export default async (req, res) => {
     user,
     plans,
     products,
-    allUserAffiliations,
+    affiliation,
+    affiliations,
     transactions,
     _transactions
   ] = await Promise.all([
@@ -112,8 +155,16 @@ export default async (req, res) => {
       console.error('[Affiliation API] Error loading products:', err);
       return [];
     }),
+    Affiliation.findOneLast({
+      userId: session.id,
+      status: { $in: ["pending", "approved"] },
+    }).catch(err => {
+      console.error('[Affiliation API] Error loading affiliation:', err);
+      return null;
+    }),
     Affiliation.find({
-      $or: [{ userId: session.id }, { user_id: session.id }],
+      userId: session.id,
+      status: "approved",
     }).catch(err => {
       console.error('[Affiliation API] Error loading affiliations:', err);
       return [];
@@ -139,27 +190,11 @@ export default async (req, res) => {
     return res.json(error("User not found"));
   }
 
-  const affiliation = lib.pickBestAffiliationFromList(allUserAffiliations || []);
-  const affiliations = (allUserAffiliations || []).filter(
-    (a) => String(a.status || "").toLowerCase() === "approved"
-  );
-  const catalog = plans || [];
-  const resolvedPlanId = lib.finalizePlanWithGuesses(
-    lib.resolveUserPlanId(user, affiliation, catalog),
-    user,
-    catalog
-  );
-  const planLabel = lib.resolvePlanLabelForUser(
-    user,
-    resolvedPlanId,
-    catalog,
-    affiliation
-  );
-
   // Filtrar planes según afiliación existente (Mostrar solo planes superiores)
   let filteredPlans = plans;
-  if (resolvedPlanId && resolvedPlanId !== "default") {
-    const currentPlanId = resolvedPlanId;
+  if (affiliation && (affiliation.status == "approved" || user.plan)) {
+    // Identificar el plan actual (usar el de la afiliación o el del usuario)
+    const currentPlanId = affiliation.plan ? affiliation.plan.id : user.plan;
 
     if (currentPlanId == "basic") { // Distribuidor
       // Mostrar solo Empresario, Master, VIP (índices > 0)
@@ -169,7 +204,7 @@ export default async (req, res) => {
       // Mostrar solo Master, VIP (índices > 1)
       filteredPlans = plans.filter((_, index) => index > 1);
     }
-    else if (currentPlanId == "master" || currentPlanId == "empresario") { // Master
+    else if (currentPlanId == "master") { // Master
       // Mostrar solo VIP (índices > 2, asumiendo que master es el 3ro)
       filteredPlans = plans.filter((_, index) => index > 2);
     }
@@ -197,20 +232,28 @@ export default async (req, res) => {
     const filteredProducts = (products || []).filter(p => p !== null && p !== undefined);
     const filteredOffices = (offices || []).filter(o => o !== null && o !== undefined);
     
+    const userRank = normalizeRankKey(user.rank);
+    const userMaxRank = normalizeRankKey(user.rank_max_history || user.rank);
+    const migrationBlocked =
+      isPackageMigration(user) && isRankPlatinoOrHigher(user.rank, user.rank_max_history);
+
     return res.json(
       success({
         name: user.name,
         lastName: user.lastName,
-        affiliated: user.affiliated || (affiliation && String(affiliation.status || "").toLowerCase() === "approved"),
+        affiliated: user.affiliated || (affiliation && affiliation.status === 'approved'),
         _activated: user._activated,
         activated: user.activated,
-        plan: resolvedPlanId,
-        planLabel,
+        plan: user.plan || (affiliation && affiliation.status === 'approved' && affiliation.plan ? affiliation.plan.id : null),
         country: user.country,
         photo: user.photo,
         tree: user.tree,
         dni: user.dni,
         token: user.token,
+        rank: userRank,
+        maxRank: userMaxRank,
+        migrationBlocked,
+        isPackageMigration: isPackageMigration(user),
 
         filteredPlans,
         products: filteredProducts,
@@ -225,6 +268,14 @@ export default async (req, res) => {
   }
 
   if (req.method == "POST") {
+    if (isPackageMigration(user) && isRankPlatinoOrHigher(user.rank, user.rank_max_history)) {
+      return res.json(
+        error(
+          "Has alcanzado el rango Platino o superior. Ya no puedes realizar migraciones de paquete."
+        )
+      );
+    }
+
     let {
       products,
       plan,
@@ -342,9 +393,8 @@ export default async (req, res) => {
     }
 
     const period = await getOrCreateOpenPeriod(new Date());
-    const affiliationId = rand();
     await Affiliation.insert({
-      id: affiliationId,
+      id: rand(),
       date: new Date(),
       userId: user.id,
       products,
@@ -365,6 +415,6 @@ export default async (req, res) => {
       type,
     });
 
-    return res.json(success({ affiliation_id: affiliationId }));
+    return res.json(success());
   }
 };
