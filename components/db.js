@@ -26,6 +26,7 @@ class DB {
     PaymentMethod,
     DashboardConfig,
     Flyer,
+    Material,
   }) {
     this.User = User;
     this.Session = Session;
@@ -48,6 +49,7 @@ class DB {
     this.PaymentMethod = PaymentMethod;
     this.DashboardConfig = DashboardConfig;
     this.Flyer = Flyer;
+    this.Material = Material;
   }
 }
 
@@ -867,6 +869,46 @@ class Flyer {
   }
 }
 
+class Material {
+  async findOne(query) {
+    const client = new Client(URL, { useUnifiedTopology: true });
+    const conn = await client.connect();
+    const db = conn.db(name);
+    const material = await db.collection("materials").findOne(query);
+    client.close();
+    return material;
+  }
+  async find(query) {
+    const client = new Client(URL, { useUnifiedTopology: true });
+    const conn = await client.connect();
+    const db = conn.db(name);
+    const materials = await db.collection("materials").find(query).toArray();
+    client.close();
+    return materials;
+  }
+  async insert(material) {
+    const client = new Client(URL, { useUnifiedTopology: true });
+    const conn = await client.connect();
+    const db = conn.db(name);
+    await db.collection("materials").insertOne(material);
+    return client.close();
+  }
+  async update(query, values) {
+    const client = new Client(URL, { useUnifiedTopology: true });
+    const conn = await client.connect();
+    const db = conn.db(name);
+    await db.collection("materials").updateOne(query, { $set: values });
+    return client.close();
+  }
+  async delete(query) {
+    const client = new Client(URL, { useUnifiedTopology: true });
+    const conn = await client.connect();
+    const db = conn.db(name);
+    await db.collection("materials").deleteOne(query);
+    return client.close();
+  }
+}
+
 module.exports = new DB({
   User: new User(),
   Session: new Session(),
@@ -889,4 +931,5 @@ module.exports = new DB({
   PaymentMethod: new PaymentMethod(),
   DashboardConfig: new DashboardConfig(),
   Flyer: new Flyer(),
+  Material: new Material(),
 });
