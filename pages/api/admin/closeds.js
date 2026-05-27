@@ -9,6 +9,8 @@ import lib from "../../../components/lib"
 function loadDbRankHarmony() {
   const dynamicRequire = eval("require")
   const candidates = [
+    path.join(process.cwd(), "components", "rank-calculation-harmony.js"),
+    path.join(process.cwd(), "..", "components", "rank-calculation-harmony.js"),
     path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js"),
     path.join(process.cwd(), "db", "rank-calculation-harmony.js"),
   ]
@@ -20,7 +22,7 @@ function loadDbRankHarmony() {
     }
   }
   return dynamicRequire(
-    path.join(process.cwd(), "..", "db", "rank-calculation-harmony.js")
+    path.join(process.cwd(), "components", "rank-calculation-harmony.js")
   )
 }
 
