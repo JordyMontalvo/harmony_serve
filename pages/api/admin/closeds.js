@@ -134,10 +134,10 @@ function emptyBonuses() {
 
 function total_points(id) {
   const node = tree.find((e) => e.id == id)
-  if (!node) return
+  if (!node) return 0
   node.total_points = node.points + node.affiliation_points
   node.childs.forEach((_id) => {
-    node.total_points += total_points(_id)
+    node.total_points += total_points(_id) || 0
   })
   return node.total_points
 }
@@ -438,8 +438,10 @@ export default async (req, res) => {
         node._total = []
         node.childs.forEach((_id) => {
           const _node = tree.find((e) => e.id == _id)
-          node.total.push(_node.total_points)
-          node._total.push(_node.total_points)
+          if (_node) {
+            node.total.push(_node.total_points || 0)
+            node._total.push(_node.total_points || 0)
+          }
         })
         node.total.sort((a, b) => b - a)
       })
