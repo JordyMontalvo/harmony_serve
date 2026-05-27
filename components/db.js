@@ -732,11 +732,11 @@ class Closed {
     client.close();
     return recharge;
   }
-  async find(query) {
+  async find(query, options = {}) {
     const client = new Client(URL, { useUnifiedTopology: true });
     const conn = await client.connect();
     const db = conn.db(name);
-    const closeds = await db.collection("closeds").find(query).toArray();
+    const closeds = await db.collection("closeds").find(query, options).toArray();
     client.close();
     return closeds;
   }

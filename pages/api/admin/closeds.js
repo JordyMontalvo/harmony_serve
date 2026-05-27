@@ -388,7 +388,7 @@ export default async (req, res) => {
 
   if (req.method == "GET") {
     try {
-      const closeds = await Closed.find({})
+      const closeds = await Closed.find({}, { projection: { tree: 0 } })
       return res.json(success({ closeds }))
     } catch (err) {
       console.error("[admin/closeds GET]", err)
