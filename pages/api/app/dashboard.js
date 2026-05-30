@@ -2,7 +2,7 @@ import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig, Affiliation } = db
-const { error, success, acum, midd,model } = lib
+const { error, success, acum, midd, model } = lib
 
 const D = ['id', 'name', 'lastName', 'affiliated', 'activated', 'tree', 'email', 'phone', 'address', 'rank', 'points', 'parentId', 'total_points']
 
@@ -72,6 +72,10 @@ export default async (req, res) => {
 
   const node = await Tree.findOne({ id: user.id })
 
+  const allUsers = await User.find({})
+  const childrenMap = lib.buildChildrenByParent(allUsers)
+  const n_affiliates = lib.countDownlineByParent(childrenMap, user.id)
+
   const childs = node && Array.isArray(node.childs) ? node.childs : []
 
   let frontals = childs.length
@@ -128,6 +132,8 @@ export default async (req, res) => {
     address:   user.address,
     directs,
     frontals,
+    n_affiliates,
+    team: n_affiliates,
 
     banner,
     ins,

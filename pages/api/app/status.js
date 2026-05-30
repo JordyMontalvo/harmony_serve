@@ -1,29 +1,8 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
-const { User, Session, Tree, Affiliation, Plan } = db
+const { User, Session, Affiliation, Plan } = db
 const { error, success, midd, map } = lib
-
-
-let tree
-let users
-let activateds
-
-function count(id) {
-
-  if(!tree[id]) return 0
-
-  if(users.get(id).activated) activateds++
-
-  const a = tree[id].childs
-
-  let ret = 0
-
-  a.forEach(id => { if(id != null) ret += (count(id) + 1) })
-
-  return ret
-}
-
 
 export default async (req, res) => {
   await midd(req, res)
@@ -38,20 +17,12 @@ export default async (req, res) => {
   const user = await User.findOne({ id: session.id || session.userId })
   if (!user) return res.json(error("User not found"))
 
-  // get team
-  tree = await Tree.find({})
-  activateds = 0
+  const allUsers = await User.find({})
+  const users = map(allUsers)
+  const childrenMap = lib.buildChildrenByParent(allUsers)
 
-  const ids = tree.map(e => e.id)
-
-  users = await User.find({ id: { $in: ids } })
-  users = map(users)
-
-  tree = tree.reduce((a, b) => { a[`${b.id}`] = b; return a }, {})
-
-  const team = count(user.id)
-
-  if(user.activated) activateds--
+  const team = lib.countDownlineByParent(childrenMap, user.id)
+  const activateds = lib.countDownlineActivatedByParent(childrenMap, users, user.id)
 
   const lastAffiliation = await lib.pickAffiliationForPlanResolution(
     Affiliation,

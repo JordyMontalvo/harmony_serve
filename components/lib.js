@@ -59,6 +59,36 @@ class Lib {
     return ret;
   }
 
+  /** Mapa sponsorId -> [userId, ...] para recorrer la red por patrocinio. */
+  buildChildrenByParent(users) {
+    const map = new Map();
+    for (const u of users) {
+      const pid = u.parentId;
+      if (!pid) continue;
+      if (!map.has(pid)) map.set(pid, []);
+      map.get(pid).push(u.id);
+    }
+    return map;
+  }
+
+  /** Total de personas hacia abajo (directos e indirectos), sin incluir al usuario raíz. */
+  countDownlineByParent(childrenMap, rootId) {
+    const children = childrenMap.get(rootId) || [];
+    return children.reduce(
+      (sum, childId) => sum + 1 + this.countDownlineByParent(childrenMap, childId),
+      0
+    );
+  }
+
+  /** Activos dentro de la red hacia abajo (directos e indirectos). */
+  countDownlineActivatedByParent(childrenMap, usersMap, rootId) {
+    const children = childrenMap.get(rootId) || [];
+    return children.reduce((sum, childId) => {
+      const activated = usersMap.get(childId)?.activated ? 1 : 0;
+      return sum + activated + this.countDownlineActivatedByParent(childrenMap, usersMap, childId);
+    }, 0);
+  }
+
   planLooksUnset(planVal) {
     if (planVal == null || planVal === "") return true;
     if (
