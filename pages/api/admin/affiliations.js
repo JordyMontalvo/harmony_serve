@@ -101,6 +101,48 @@ const DISTRIBUTOR_FIXED_PAYMENT = 50;
 
 let pays = [];
 
+function normalizePlanId(planField) {
+  if (!planField) return "";
+  if (typeof planField === "string") {
+    const s = planField.trim().toLowerCase();
+    if (s === "distribuidor" || s === "ejecutivo") return "basic";
+    return s;
+  }
+  const id = planField.id || planField._id;
+  if (id) {
+    const s = String(id).trim().toLowerCase();
+    if (s === "distribuidor" || s === "ejecutivo") return "basic";
+    return s;
+  }
+  const name = String(planField.name || "")
+    .trim()
+    .toLowerCase();
+  if (name === "distribuidor" || name === "ejecutivo") return "basic";
+  return name;
+}
+
+function findTreeNode(userId) {
+  if (!userId || !tree) return null;
+  let node = tree.find((e) => e.id === userId);
+  if (node) return node;
+  const u = users && users.find((e) => e.id === userId);
+  if (u?.coverage?.id) {
+    node = tree.find((e) => e.id === u.coverage.id);
+  }
+  return node || null;
+}
+
+/** ID del patrocinador en el árbol (user.parentId o nodo tree.parent). */
+function getUplineUserId(userId) {
+  const node = findTreeNode(userId);
+  if (node?.parent) return node.parent;
+  const u = users && users.find((e) => e.id === userId);
+  if (!u?.parentId) return null;
+  const parent = users.find((e) => e.id === u.parentId);
+  if (!parent) return null;
+  return parent.coverage?.id || parent.id;
+}
+
 /**
  * Nueva función de pago de bonos por PORCENTAJES sobre PUNTOS
  * 
@@ -125,10 +167,11 @@ async function pay_bonus_percentage(
   if (level >= 30) return;
 
   const user = users.find((e) => e.id === userId);
-  const node = tree.find((e) => e.id === userId);
 
-  // Si el usuario no existe, termina la recursión
-  if (!user || !node) return;
+  // Solo se requiere el usuario beneficiario; el nodo en tree es opcional
+  if (!user) return;
+
+  const planKey = normalizePlanId(affiliatedPlan) || String(affiliatedPlan || "").toLowerCase();
 
   // Verificar si el usuario está activo
   const isActive = user._activated || user.activated;
@@ -136,15 +179,16 @@ async function pay_bonus_percentage(
   const name = migration ? "migration bonus" : "affiliation bonus";
 
   // REGLA ESPECIAL: Distribuidor solo paga nivel 1 con monto fijo
-  if (affiliatedPlan === 'basic' && level >= 1) {
+  if (planKey === "basic" && level >= 1) {
     // Distribuidor solo paga nivel 0 (nivel 1), continuar hacia arriba sin pagar
-    if (node.parent) {
+    const uplineId = getUplineUserId(userId);
+    if (uplineId) {
       await pay_bonus_percentage(
-        node.parent,
+        uplineId,
         level + 1,
         affiliationId,
         affiliatedPoints,
-        affiliatedPlan,
+        planKey,
         affiliatedUserId,
         migration
       );
@@ -158,9 +202,10 @@ async function pay_bonus_percentage(
   // Profundidad habilitada por el rango del usuario (máximo histórico)
   const maxLevels = getMaxLevelsForUser(user);
 
-  if (isActive && level < maxLevels) {
+  // Inactivos también generan comisión: se acumula en saldo no disponible (virtual: true)
+  if (level < maxLevels) {
     // CASO ESPECIAL: Distribuidor recibe pago fijo en nivel 1
-    if (affiliatedPlan === 'basic' && level === 0) {
+    if (planKey === "basic" && level === 0) {
       payment = DISTRIBUTOR_FIXED_PAYMENT; // S/ 50 fijo
     } else {
       // Caso normal: Porcentaje sobre puntos según nivel
@@ -183,21 +228,25 @@ async function pay_bonus_percentage(
         _user_id: affiliatedUserId,
         // Campos adicionales para tracking
         level: level + 1, // Guardar nivel (1-30)
-        percentage: affiliatedPlan === 'basic' && level === 0 ? null : getPercentageForLevel(level + 1),
+        percentage: planKey === "basic" && level === 0 ? null : getPercentageForLevel(level + 1),
         points_base: affiliatedPoints
       });
       pays.push(transactionId);
+      console.log(
+        `[affiliation bonus] user=${user.id} level=${level + 1} value=${payment} virtual=${virtual}`
+      );
     }
   }
 
   // Continuar hacia arriba (siempre, hasta 30 niveles)
-  if (node.parent) {
+  const uplineId = getUplineUserId(userId);
+  if (uplineId) {
     await pay_bonus_percentage(
-      node.parent,
+      uplineId,
       level + 1,
       affiliationId,
       affiliatedPoints,
-      affiliatedPlan,
+      planKey,
       affiliatedUserId,
       migration
     );
@@ -327,7 +376,8 @@ const handler = async (req, res) => {
       // Actualizar usuario con el plan completo
       
       // REGLA ESPECIAL: Distribuidor (basic) inactivo al registrarse
-      const isDistributor = affiliation.plan.id === 'basic';
+      const plan = normalizePlanId(affiliation.plan);
+      const isDistributor = plan === "basic";
       const shouldActivate = !isDistributor; // Todos activos EXCEPTO Distribuidor
 
       await User.update(
@@ -337,7 +387,7 @@ const handler = async (req, res) => {
           _activated: shouldActivate,  // Distribuidor: false, Otros: true
           activated: shouldActivate,   // Distribuidor: false, Otros: true
           affiliation_date: new Date(),
-          plan: affiliation.plan.id,
+          plan,
           n: affiliation.plan.n,
           affiliation_points: affiliation.plan.affiliation_points,
         }
@@ -378,20 +428,28 @@ const handler = async (req, res) => {
       users = await User.find({});
       pays = [];
 
-      const plan = affiliation.plan.id;
       const affiliationPoints = affiliation.plan.affiliation_points; // PUNTOS, no monto
       const isMigration = user.plan !== "default"; // Si ya tenía un plan, es migración
 
-      // Llamar a la nueva función con PUNTOS
-      await pay_bonus_percentage(
-        user.parentId,
-        0, // Empezar en nivel 0 (nivel 1)
-        affiliation.id,
-        affiliationPoints, // PUNTOS del afiliado
-        plan,
-        user.id,
-        isMigration
-      );
+      // Bono al patrocinador directo (y upline) al aprobar la afiliación
+      if (!user.parentId) {
+        console.warn(
+          `[affiliation approve] Sin parentId para user=${user.id}, no se pagan bonos`
+        );
+      } else {
+        await pay_bonus_percentage(
+          user.parentId,
+          0, // Empezar en nivel 0 (nivel 1)
+          affiliation.id,
+          affiliationPoints, // PUNTOS del afiliado
+          plan,
+          user.id,
+          isMigration
+        );
+        console.log(
+          `[affiliation approve] Bonos generados: ${pays.length} transacciones para parent=${user.parentId}`
+        );
+      }
 
       // Actualizar la afiliación con las transacciones
       await Affiliation.update({ id }, { transactions: pays }); // Aquí se agregan las IDs de las transacciones
@@ -412,6 +470,13 @@ const handler = async (req, res) => {
           products: office.products,
         }
       );
+
+      // Migrar saldo virtual → disponible solo si el usuario queda activo al aprobar la afiliación.
+      // Distribuidor (basic) inicia inactivo: sus comisiones permanecen en saldo no disponible
+      // hasta su primera activación mensual (ver activations.js).
+      if (!shouldActivate) {
+        return res.json(success());
+      }
 
       // migrar transacciones virtuales solo las que fueron creadas después del último cierre
       // y que NO sean transacciones "closed reset" (compensaciones de cierre)

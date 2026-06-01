@@ -448,7 +448,7 @@ export default async (req, res) => {
             return;
           }
           const id = rand();
-          const virtual = parent.activated ? false : true;
+          const virtual = !(parent._activated || parent.activated);
           console.log("parent: ", parent);
 
           await Transaction.insert({
