@@ -144,6 +144,7 @@ export default async (req, res) => {
     rank:    normalizeRankKey(user.rank),
     maxRank: normalizeRankKey(user.rank_max_history || user.rank),
     points:  user.points,
+    affiliation_points: user.affiliation_points || 0,
     plans,
     total_points: user.total_points, // <-- Agregar todos los planes a la respuesta
     travelBonusText: dashboardConfig.text || 'Tu progreso hacia el Bono Viaje se actualizará próximamente. ¡Sigue trabajando para alcanzar tus objetivos!',
