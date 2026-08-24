@@ -26,6 +26,7 @@ export default async (req, res) => {
         holder: method.titular,
         type: method.tipo,
         cci: method.cci || "",
+        requiresVoucher: method.requiresVoucher !== undefined ? Boolean(method.requiresVoucher) : true,
         active: method.active
       }))
       

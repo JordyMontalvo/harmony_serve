@@ -49,6 +49,7 @@ export default async (req, res) => {
         banco: paymentMethod.banco,
         tipo: paymentMethod.tipo,
         cci: paymentMethod.cci || "",
+        requiresVoucher: paymentMethod.requiresVoucher !== undefined ? Boolean(paymentMethod.requiresVoucher) : true,
         active: paymentMethod.active !== undefined ? paymentMethod.active : true,
         createdAt: new Date(),
         updatedAt: new Date()

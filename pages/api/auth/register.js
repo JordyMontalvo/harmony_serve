@@ -15,7 +15,8 @@ const Register = async (req, res) => {
     return res.json(error('code required'))
   }
 
-  code = code.trim().toUpperCase()
+  const codeClean = code.trim()
+  const codeUpper = codeClean.toUpperCase()
 
   const user = await User.findOne({ dni })
 
@@ -28,7 +29,14 @@ const Register = async (req, res) => {
     if(existingEmail) return res.json(error('email already use'))
   }
   
-  const parent = await User.findOne({ token: code })
+  // Buscar patrocinador por DNI o por Token
+  const parent = await User.findOne({
+    $or: [
+      { dni: codeClean },
+      { token: codeUpper },
+      { token: codeClean }
+    ]
+  })
 
   // valid code
   if(!parent) return res.json(error('code not found'))
