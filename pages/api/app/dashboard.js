@@ -1,5 +1,6 @@
 import db  from "../../../components/db"
 import lib from "../../../components/lib"
+import { getEstimatedResidualForUser } from "../../../components/closure-engine"
 
 const { User, Session, Transaction, Tree, Banner, Plan, DashboardConfig, Affiliation } = db
 const { error, success, acum, midd, model } = lib
@@ -113,6 +114,8 @@ export default async (req, res) => {
     await DashboardConfig.insert(dashboardConfig)
   }
 
+  const estimatedResidualData = await getEstimatedResidualForUser(db, user.id)
+
   // response
   return res.json(success({
     name:       user.name,
@@ -148,5 +151,7 @@ export default async (req, res) => {
     plans,
     total_points: user.total_points, // <-- Agregar todos los planes a la respuesta
     travelBonusText: dashboardConfig.text || 'Tu progreso hacia el Bono Viaje se actualizará próximamente. ¡Sigue trabajando para alcanzar tus objetivos!',
+    estimatedResidual: estimatedResidualData.estimatedResidual || 0,
+    estimatedResidualDetails: estimatedResidualData,
   }))
 }
