@@ -146,6 +146,7 @@ export default async (req, res) => {
    _balance: (insVirtual - outsVirtual),
     rank:    normalizeRankKey(user.rank),
     maxRank: normalizeRankKey(user.rank_max_history || user.rank),
+    liveRank: normalizeRankKey(estimatedResidualData.rank),
     points:  user.points,
     affiliation_points: user.affiliation_points || 0,
     plans,
