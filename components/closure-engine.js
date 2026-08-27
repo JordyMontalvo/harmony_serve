@@ -158,7 +158,7 @@ export function buildHarmonyUsuarioListFromTree(tree) {
     id: node.id,
     name: node.name,
     puntos_productos: Number(node.points || 0),
-    puntos_afiliacion: 0,
+    puntos_afiliacion: Number(node.affiliation_points || 0),
     total_points: puntajeGrupalSinPropio(node),
     directos: node.childs || [],
   }))
@@ -175,10 +175,11 @@ export function applyHarmonyRanks(tree, rankIdsPorUsuario, usuariosHarmonyList) 
   for (const node of tree) {
     const uh = usuariosHarmonyList.find((e) => e.id === node.id)
     const pp = uh ? Number(uh.puntos_productos || 0) : 0
+    const pp_afil = uh ? Number(uh.puntos_afiliacion || 0) : 0
     const rid = rankIdsPorUsuario[node.id] || 0
 
     let rankKey = "none"
-    if (pp < 180) rankKey = "none"
+    if ((pp + pp_afil) < 180) rankKey = "none"
     else if (!rid) rankKey = "SIN_RANGO"
     else rankKey = RANGO_ID_TO_KEY[rid] || "SIN_RANGO"
 
@@ -240,7 +241,9 @@ export function isTrueDbFlag(value) {
 }
 
 export function hasActivationPoints(record) {
-  return Number(record?.points || record?.puntos_productos || 0) >= ACTIVE_POINTS_THRESHOLD
+  const points = Number(record?.points || record?.puntos_productos || 0)
+  const afil = Number(record?.affiliation_points || record?.puntos_afiliacion || 0)
+  return (points + afil) >= ACTIVE_POINTS_THRESHOLD
 }
 
 export function isFullActivated(record) {
