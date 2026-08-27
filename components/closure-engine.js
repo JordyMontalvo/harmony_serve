@@ -405,8 +405,16 @@ export async function calculateClosureTree(db, { createFastBonusTransactions = f
     node._pays = []
   })
 
-  // Calcular puntos totales del árbol desde la raíz
-  computeTotalPoints("5f0e0b67af92089b5866bcd0", tree)
+  // Calcular puntos totales del árbol desde la raíz (detección dinámica)
+  // Buscar todos los nodos raíz (nodos sin padre dentro del árbol)
+  const treeIds = new Set(tree.map((n) => String(n.id)))
+  const rootNodes = tree.filter((n) => !n.parent || !treeIds.has(String(n.parent)))
+  if (rootNodes.length > 0) {
+    rootNodes.forEach((root) => computeTotalPoints(root.id, tree))
+  } else {
+    // Fallback al ID histórico de la raíz si no se detecta ningún nodo raíz
+    computeTotalPoints("5f0e0b67af92089b5866bcd0", tree)
+  }
 
   tree.forEach((node) => {
     node.total = []
@@ -427,7 +435,9 @@ export async function calculateClosureTree(db, { createFastBonusTransactions = f
   applyHarmonyRanks(tree, rankIdsPorUsuario, usuariosHarmony)
 
   for (let node of tree) {
-    if (node.parent) pay_residual(node.parent, 0, node, tree)
+    // Solo propagar residual hacia arriba si el nodo hijo tiene puntos > 0
+    // (un nodo activo con 0 puntos no aporta residual real a sus uplines)
+    if (node.parent && node.points > 0) pay_residual(node.parent, 0, node, tree)
   }
 
   if (createFastBonusTransactions && Transaction) {
@@ -480,7 +490,8 @@ export async function calculateClosureTree(db, { createFastBonusTransactions = f
  */
 let cachedClosure = null
 let cacheTimestamp = 0
-const CACHE_TTL_MS = 60 * 1000 // 60 segundos
+// TTL reducido a 15s para que los cambios de puntos se reflejen rápido en el dashboard
+const CACHE_TTL_MS = 15 * 1000 // 15 segundos
 
 export async function getClosurePreviewCached(db, { forceRefresh = false } = {}) {
   const now = Date.now()
