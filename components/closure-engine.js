@@ -61,12 +61,13 @@ export const pays = [
 
 export function getPercentageForLevel(level1Based) {
   if (level1Based <= 0) return 0
-  if (level1Based === 1) return 0.73
-  if (level1Based === 2) return 0.05
-  if (level1Based === 3) return 0.1
-  if (level1Based === 4) return 0.04
-  if (level1Based === 5) return 0.02
-  if (level1Based >= 6 && level1Based <= 9) return 0.02
+  if (level1Based === 1) return 0.20
+  if (level1Based === 2) return 0.09
+  if (level1Based === 3) return 0.18
+  if (level1Based === 4) return 0.07
+  if (level1Based === 5) return 0.05
+  if (level1Based === 6) return 0.03
+  if (level1Based >= 7 && level1Based <= 9) return 0.02
   if (level1Based >= 10 && level1Based <= 30) return 0.01
   return 0
 }
