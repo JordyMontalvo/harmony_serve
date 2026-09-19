@@ -2,13 +2,15 @@ import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { Activation, Affiliation, User, Office, Product } = db
-const { error, success, midd } = lib
+const { error, success, midd, safe } = lib
 
 
 const Invoice = async (req, res) => {
 
-  const { id } = JSON.parse(req.body)
-  // console.log({ id })
+  // debe ser un primitivo: con { "$ne": null } se devolverian los datos
+  // personales de una compra cualquiera
+  const id = safe(JSON.parse(req.body).id)
+  if(id === null) return res.json(error('invalid id'))
 
   // get activation
   const activation  = await Activation.findOne({ id })

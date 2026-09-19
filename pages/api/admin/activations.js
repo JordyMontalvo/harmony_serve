@@ -6,7 +6,7 @@ const URL = process.env.DB_URL; // Asegúrate de que esta variable esté definid
 const name = process.env.DB_NAME;
 
 const { Activation, User, Tree, Token, Office, Transaction, Closed } = db;
-const { error, success, midd, ids, map, model, rand } = lib;
+const { error, success, midd, ids, map, model, rand, safe } = lib;
 
 // valid filters
 // const q = { all: {}, pending: { status: 'pending'} }
@@ -189,7 +189,12 @@ export default async (req, res) => {
   }
 
   if (req.method == "POST") {
-    const { action, id } = req.body;
+    const { action } = req.body;
+
+    // el id debe ser un primitivo: con { "$ne": null } se aprobaria o
+    // rechazaria una activacion cualquiera, con sus comisiones
+    const id = safe(req.body.id);
+    if (id === null) return res.json(error("activation not exist"));
 
     // get activation
     const activation = await Activation.findOne({ id });

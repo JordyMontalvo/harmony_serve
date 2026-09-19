@@ -2,7 +2,7 @@ import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { User, OfficeCollect } = db
-const { error, success, midd, ids, map, model } = lib
+const { error, success, midd, ids, map, model, safe } = lib
 
 // valid filters
 // const q = { all: {}, pending: { status: 'pending'} }
@@ -58,7 +58,12 @@ const handler = async (req, res) => {
 
   if(req.method == 'POST') {
 
-    const { action, id } = req.body
+    const { action } = req.body
+
+    // el id debe ser un primitivo: con { "$ne": null } se aprobaria
+    // un cobro de oficina cualquiera
+    const id = safe(req.body.id)
+    if(id === null) return res.json(error('collect not exist'))
 
     // get collect
     const collect = await OfficeCollect.findOne({ id })

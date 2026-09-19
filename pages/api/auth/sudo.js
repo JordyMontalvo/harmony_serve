@@ -2,12 +2,15 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { User, Session } = db
-const { rand, error, success, midd } = lib
+const { rand, error, success, midd, safe } = lib
 
 const handler = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json(error('Method not allowed'))
 
-  const { dni, admin_session } = req.body
+  // ambos deben ser primitivos: con { "$ne": null } se obtendria la sesion
+  // de un usuario cualquiera
+  const dni           = safe(req.body.dni)
+  const admin_session = safe(req.body.admin_session)
 
   if (!dni) return res.json(error('DNI is required'))
 

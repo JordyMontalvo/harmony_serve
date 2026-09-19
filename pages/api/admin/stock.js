@@ -2,7 +2,8 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { Office, Product, OfficeCollect } = db
-const { success, midd, rand } = lib
+const { success, midd, rand, error } = lib
+const { safe } = lib
 
 
 export default async (req, res) => {
@@ -35,11 +36,17 @@ export default async (req, res) => {
 
   if(req.method == 'POST') {
 
-    const { id, amount } = req.body
+    const { amount } = req.body
+
+    // el id debe ser un primitivo: con { "$ne": null } se descontaria
+    // el beneficio de una oficina cualquiera
+    const id = safe(req.body.id)
+    if(id === null) return res.json(error('invalid id'))
 
     console.log('post ...', id, amount)
 
     let office = await Office.findOne({ id })
+    if(!office) return res.json(error('office not exist'))
 
     const _id = rand()
 

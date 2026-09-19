@@ -2,7 +2,7 @@ import db from "../../../components/db";
 import lib from "../../../components/lib";
 
 const { Affiliation, User, Tree, Token, Transaction, Office, Closed } = db;
-const { error, success, midd, ids, parent_ids, map, model, rand } = lib;
+const { error, success, midd, ids, parent_ids, map, model, rand, safe } = lib;
 
 const A = [
   "id",
@@ -349,7 +349,12 @@ const handler = async (req, res) => {
   }
 
   if (req.method == "POST") {
-    const { id, action } = req.body;
+    const { action } = req.body;
+
+    // el id debe ser un primitivo: con { "$ne": null } se aprobaria o
+    // rechazaria una afiliacion cualquiera, alterando el arbol y las comisiones
+    const id = safe(req.body.id);
+    if (id === null) return res.json(error("affiliation not exist"));
 
     // get affiliation
     let affiliation = await Affiliation.findOne({ id });

@@ -2,14 +2,16 @@ import db  from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { Session } = db
-const { midd } = lib
+const { midd, safe } = lib
 
 
 const Logout = async (req, res) => {
 
-  let { session } = req.body
+  // debe ser un primitivo: con { "$ne": null } se cerraria la sesion
+  // de otro usuario, no la propia
+  const session = safe(req.body.session)
 
-  await Session.delete(session)
+  if(session !== null) await Session.delete(session)
 
   return res.end()
 }

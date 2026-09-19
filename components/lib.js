@@ -8,6 +8,20 @@ class Lib {
   rand() {
     return Math.random().toString(36).substr(2);
   }
+
+  /**
+   * Devuelve el valor solo si es un primitivo (cadena o numero).
+   *
+   * El cuerpo JSON de una peticion puede contener objetos, de modo que
+   * { "dni": { "$ne": null } } llegaria intacto a la consulta de MongoDB y
+   * haria coincidir un registro cualquiera. Los clientes legitimos siempre
+   * envian cadenas o numeros, asi que descartar el resto no afecta a
+   * ningun flujo real.
+   */
+  safe(value) {
+    if (typeof value === "string" || typeof value === "number") return value;
+    return null;
+  }
   error(msg) {
     return { error: true, msg };
   }

@@ -3,12 +3,18 @@ import db     from "../../../components/db"
 import lib    from "../../../components/lib"
 
 const { User, Session, Token, Tree } = db
-const { rand, error, success, midd } = lib
+const { rand, error, success, midd, safe } = lib
 
 
 const Register = async (req, res) => {
 
-  let { country, dni, name, lastName, date, email, password, phone, code, department, province, district } = req.body
+  let { country, name, lastName, date, password, phone, code, department, province, district } = req.body
+
+  // dni y email se usan como filtro de busqueda: deben ser primitivos
+  const dni   = safe(req.body.dni)
+  const email = safe(req.body.email)
+
+  if(dni === null) return res.json(error('dni required'))
 
   // Validar que el código existe y no esté vacío
   if (!code || code.trim() === '') {

@@ -6,7 +6,7 @@ const URL = process.env.DB_URL;
 const name = process.env.DB_NAME;
 
 const { Transaction } = db;
-const { midd, success, rand } = lib;
+const { midd, success, error, rand, safe } = lib;
 
 export default async (req, res) => {
   await midd(req, res);
@@ -139,7 +139,10 @@ export default async (req, res) => {
     const { action } = req.body;
 
     if (action == "edit") {
-      const { id } = req.body;
+      // el id debe ser un primitivo: con { "$ne": null } se editaria
+      // una transaccion cualquiera
+      const id = safe(req.body.id);
+      if (id === null) return res.json(error("invalid id"));
       const {
         _user_id,
         _type,
@@ -189,7 +192,11 @@ export default async (req, res) => {
     }
 
     if (action == "delete") {
-      const { id } = req.body;
+      // el id debe ser un primitivo: con { "$ne": null } se borraria
+      // una transaccion cualquiera
+      const id = safe(req.body.id);
+      if (id === null) return res.json(error("invalid id"));
+
       await Transaction.delete({ id });
     }
 

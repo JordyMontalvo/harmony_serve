@@ -2,7 +2,7 @@ import db from "../../../components/db"
 import lib from "../../../components/lib"
 
 const { DashboardConfig, User } = db
-const { error, success, midd } = lib
+const { error, success, midd, safe } = lib
 
 export default async (req, res) => {
   await midd(req, res)
@@ -65,6 +65,10 @@ export default async (req, res) => {
 
     // Si se especifica un userId, crear/actualizar configuración específica del usuario
     if (userId) {
+      // el userId debe ser un primitivo: con { "$ne": null } se alteraria
+      // la configuración de un usuario cualquiera
+      if (safe(userId) === null) return res.json(error('Usuario no encontrado'))
+
       // Verificar que el usuario exista
       const user = await User.findOne({ id: userId })
       if (!user) {

@@ -3,7 +3,7 @@ import db from "../../../components/db";
 import lib from "../../../components/lib";
 
 const { User, Transaction, Closed } = db;
-const { error, success, midd, model } = lib;
+const { error, success, midd, model, safe } = lib;
 
 // valid filters
 // const q = { all: {}, affiliated: { affiliated: true }, activated: { activated: true } }
@@ -320,7 +320,13 @@ const handler = async (req, res) => {
   if (req.method == "POST") {
     console.log("POST ...");
 
-    const { action, id } = req.body;
+    const { action } = req.body;
+
+    // el id debe ser un primitivo: con { "$ne": null } se editaria un
+    // usuario cualquiera o se migrarian sus transacciones virtuales
+    const id = safe(req.body.id);
+    if (id === null) return res.json(error("invalid id"));
+
     console.log({ action, id });
 
     if (action == "migrate") {
@@ -429,20 +435,24 @@ const handler = async (req, res) => {
       const {
         _name,
         _lastName,
-        _dni,
         _password,
-        _parent_dni,
         _points,
         _rank,
         city,
         plan,
         affiliation_points,
       } = req.body.data;
+
+      // ambos se usan como filtro de busqueda: deben ser primitivos, o se
+      // saltaria la comprobacion de dni duplicado y se reasignaria
+      // el patrocinador a un usuario cualquiera
+      const _dni        = safe(req.body.data._dni);
+      const _parent_dni = safe(req.body.data._parent_dni);
+      // nunca se registra _password: los logs de Heroku son legibles
       console.log({
         _name,
         _lastName,
         _dni,
-        _password,
         _parent_dni,
         _points,
         _rank,
