@@ -515,29 +515,82 @@ export function invalidateClosureCache() {
 }
 
 /**
+ * Suma puntos de la red (productos + afiliación) desde el nivel 1
+ * hasta maxDepth inclusive. No incluye puntos propios del usuario raíz.
+ */
+export function sumNetworkPointsUpToDepth(rootId, tree, maxDepth) {
+  const depthLimit = Math.max(0, Number(maxDepth) || 0)
+  if (!rootId || !Array.isArray(tree) || depthLimit <= 0) return 0
+
+  const byId = new Map(tree.map((n) => [String(n.id), n]))
+  let total = 0
+  let currentIds = [String(rootId)]
+
+  for (let depth = 1; depth <= depthLimit; depth++) {
+    const nextIds = []
+    for (const id of currentIds) {
+      const node = byId.get(id)
+      if (!node || !Array.isArray(node.childs)) continue
+      for (const childId of node.childs) {
+        const child = byId.get(String(childId))
+        if (!child) continue
+        total +=
+          Number(child.points || 0) + Number(child.affiliation_points || 0)
+        nextIds.push(String(childId))
+      }
+    }
+    currentIds = nextIds
+    if (!currentIds.length) break
+  }
+
+  return total
+}
+
+/**
+ * Profundidad del indicador visual "Puntaje por rango":
+ * niveles pagables del rango en vivo + 2, tope 30.
+ */
+export function rankPointsDepthForLevels(payLevels) {
+  return Math.min(Math.max(0, Number(payLevels) || 0) + 2, 30)
+}
+
+/**
  * Obtiene el monto de residuales estimados en tiempo real para un usuario.
  * @param {object} db 
  * @param {string} userId 
- * @returns {Promise<{ estimatedResidual: number, rank: string, levels: number, lines: Array }>}
+ * @returns {Promise<{ estimatedResidual: number, rank: string, levels: number, lines: Array, rankPoints: number, rankPointsDepth: number }>}
  */
 export async function getEstimatedResidualForUser(db, userId) {
+  const empty = {
+    estimatedResidual: 0,
+    rank: "none",
+    levels: 0,
+    lines: [],
+    rankPoints: 0,
+    rankPointsDepth: 0,
+  }
   try {
-    if (!userId) return { estimatedResidual: 0, rank: "none", levels: 0, lines: [] }
+    if (!userId) return empty
     const { tree } = await getClosurePreviewCached(db)
     const node = tree.find((n) => String(n.id) === String(userId))
-    if (!node) {
-      return { estimatedResidual: 0, rank: "none", levels: 0, lines: [] }
-    }
+    if (!node) return empty
+
+    const levels = node.levels || 0
+    const rankPointsDepth = rankPointsDepthForLevels(levels)
+    const rankPoints = sumNetworkPointsUpToDepth(userId, tree, rankPointsDepth)
     const bonus = Number(node.residual_bonus || 0)
+
     return {
       estimatedResidual: Number(bonus.toFixed(2)),
       rank: node.rank || "none",
-      levels: node.levels || 0,
+      levels,
       lines: node.residual_bonus_arr || [],
+      rankPoints,
+      rankPointsDepth,
     }
   } catch (err) {
     console.error("[getEstimatedResidualForUser error]", err)
-    return { estimatedResidual: 0, rank: "none", levels: 0, lines: [] }
+    return empty
   }
 }
 
@@ -573,4 +626,6 @@ export default {
   getClosurePreviewCached,
   invalidateClosureCache,
   getEstimatedResidualForUser,
+  sumNetworkPointsUpToDepth,
+  rankPointsDepthForLevels,
 }

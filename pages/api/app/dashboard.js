@@ -154,5 +154,7 @@ export default async (req, res) => {
     travelBonusText: dashboardConfig.text || 'Tu progreso hacia el Bono Viaje se actualizará próximamente. ¡Sigue trabajando para alcanzar tus objetivos!',
     estimatedResidual: estimatedResidualData.estimatedResidual || 0,
     estimatedResidualDetails: estimatedResidualData,
+    rankPoints: estimatedResidualData.rankPoints || 0,
+    rankPointsDepth: estimatedResidualData.rankPointsDepth || 0,
   }))
 }
