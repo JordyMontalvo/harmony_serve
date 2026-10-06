@@ -516,14 +516,21 @@ export function invalidateClosureCache() {
 
 /**
  * Suma puntos de la red (productos + afiliación) desde el nivel 1
- * hasta maxDepth inclusive. No incluye puntos propios del usuario raíz.
+ * hasta maxDepth inclusive, más el puntaje propio del usuario
+ * (puntos mensuales + puntos de afiliación).
  */
 export function sumNetworkPointsUpToDepth(rootId, tree, maxDepth) {
   const depthLimit = Math.max(0, Number(maxDepth) || 0)
-  if (!rootId || !Array.isArray(tree) || depthLimit <= 0) return 0
+  if (!rootId || !Array.isArray(tree)) return 0
 
   const byId = new Map(tree.map((n) => [String(n.id), n]))
-  let total = 0
+  const root = byId.get(String(rootId))
+  if (!root) return 0
+
+  let total =
+    Number(root.points || 0) + Number(root.affiliation_points || 0)
+  if (depthLimit <= 0) return total
+
   let currentIds = [String(rootId)]
 
   for (let depth = 1; depth <= depthLimit; depth++) {
