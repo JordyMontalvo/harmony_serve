@@ -24,7 +24,7 @@ server/
 ├── 🧩 components/              # Componentes del servidor
 │   ├── db.js                   # Conexión MongoDB
 │   ├── email-service.js        # Servicio de email
-│   ├── mlm-prediction-service.js # Predicciones MLM
+│   ├── mlm-ai-service.js       # Cliente de la API de IA (Python)
 │   └── ...
 └── 🌐 pages/api/               # Endpoints de la API
     ├── admin/                  # Endpoints de administración
@@ -36,20 +36,25 @@ server/
 
 ## 🚀 Inicio Rápido
 
+**Requisitos:** Node.js 16.x (ver `engines` en `package.json`), npm y un MongoDB accesible (local o Atlas).
+
 ```bash
 # Instalar dependencias
 npm install
 
-# Configurar variables de entorno
-cp env.example .env
+# Configurar variables de entorno (la plantilla es ENV_TEMPLATE.txt)
+cp ENV_TEMPLATE.txt .env
 # Editar .env con tus credenciales
 
-# Ejecutar en desarrollo
+# Ejecutar en desarrollo (servidor de desarrollo de Next.js, puerto 3000)
 npm run dev
 
-# Ejecutar en producción
-npm start
+# Ejecutar en producción (primero compilar)
+npm run build
+NODE_ENV=production npm start   # node server.js, escucha en 0.0.0.0:PORT
 ```
+
+📖 **Guía completa de arranque, despliegue y errores frecuentes:** [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md)
 
 ## 🌐 Endpoints Principales
 
@@ -81,8 +86,10 @@ npm start
 NODE_ENV=production
 PORT=3000
 
-# Base de datos
-DB_URL=mongodb://localhost:27017/sifrah
+# Base de datos (se necesitan DB_URL y MONGODB_URI, ver docs/DESPLIEGUE.md)
+DB_URL=mongodb://localhost:27017
+DB_NAME=sifrah
+MONGODB_URI=mongodb://localhost:27017
 
 # Email (Gmail)
 EMAIL_USER=tu-email@gmail.com
@@ -96,14 +103,18 @@ FRONTEND_URL=
 PYTHON_API_URL=http://localhost:5001
 ```
 
+La lista completa (con cuáles son obligatorias) está en [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md#variables-de-entorno).
+
 ## 🛠️ Scripts Disponibles
 
 ```bash
 npm run dev      # Desarrollo
 npm run build    # Build para producción
-npm start        # Servidor de producción
+npm start        # Servidor de producción (node server.js; requiere npm run build)
+npm run test:closure  # Prueba de vista previa de cierre (scripts/closure-preview-test.js)
 
 # Scripts de utilidad
+node scripts/generate-admin-hash.js  # Hash bcrypt para ADMIN_PANEL_PASSWORD_HASH
 node scripts/change-email-sender.js  # Cambiar email de envío
 node scripts/test-email-config.js    # Probar configuración de email
 ```
@@ -148,13 +159,17 @@ heroku config:set EMAIL_PASS="tu-app-password" --app tu-app
 ## 🚀 Despliegue
 
 ### Heroku
+El `Procfile` define `web: npm start`. La rama base es `master`:
 ```bash
-git push heroku main
+git push heroku master
 ```
 
 ### Variables de entorno en Heroku
-- Configurar todas las variables del archivo `env.example`
-- Especial atención a `DB_URL`, `EMAIL_USER`, `EMAIL_PASS`
+- Configurar las variables de `ENV_TEMPLATE.txt` con `heroku config:set`
+- Especial atención a `DB_URL`, `MONGODB_URI`, `EMAIL_USER`, `EMAIL_PASS` y `ADMIN_PANEL_PASSWORD_HASH`
+
+> El job de despliegue de `.github/workflows/ci-cd.yml` es un placeholder (solo hace `echo`); hoy el despliegue es manual.
+> Detalles y errores frecuentes: [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md)
 
 ## 📞 Soporte
 
@@ -166,5 +181,4 @@ git push heroku main
 
 **Versión:** 1.0.0  
 **Estado:** ✅ Producción  
-**Mantenimiento:** Equipo de Desarrollo Sifrah # harmony_serve
-# harmony_serve
+**Mantenimiento:** Equipo de Desarrollo Sifrah

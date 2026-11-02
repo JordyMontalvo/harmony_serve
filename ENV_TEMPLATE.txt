@@ -34,12 +34,53 @@ NODE_ENV=development
 # Puerto del servidor
 PORT=3000
 
+# Nombre de la base de datos (por defecto: sifrah)
+DB_NAME=sifrah
+
+# ===================================
+# PANEL ADMIN Y CONTRASEÑA MAESTRA
+# ===================================
+
+# Usuario del panel admin (hay un valor por defecto en el código)
+ADMIN_PANEL_USER=cambia-este-usuario
+# Hash bcrypt: genéralo con `node scripts/generate-admin-hash.js`
+# (si no defines hash ni password, se usa una credencial por defecto: NO en producción)
+ADMIN_PANEL_PASSWORD_HASH=
+# Alternativa menos segura al hash (texto plano)
+# ADMIN_PANEL_PASSWORD=
+# Contraseña maestra usada en login, transfer y password
+ADMIN_PASSWORD=cambia-esta-clave
+
+# ===================================
+# INTEGRACIONES (según funcionalidad usada)
+# ===================================
+
+# ImageKit (subida de imágenes: pages/api/auxi/imagekit.js)
+IMAGEKIT_PUBLIC=
+IMAGEKIT_PRIVATE=
+
+# URL de la app Vue a la que redirige /api/auth/bridge
+VUE_APP_URL=http://localhost:8080
+
+# API de IA en Python (components/mlm-ai-service.js)
+PYTHON_API_URL=http://localhost:5001
+
+# Mercado Pago (el endpoint que lo usa está comentado en el código)
+# MP_ACCESS_TOKEN=
+
+# Mailgun (components/mail.js; puede estar en desuso)
+# MAILGUN_KEY=
+# MAILGUN_DOMAIN=
+# DOMAIN=
+
 # ===================================
 # CORS (Opcional - para producción)
 # ===================================
 
-# Orígenes permitidos (separados por coma)
+# Orígenes permitidos (separados por coma) - lo lee middleware/middleware-cors.js
 # CORS_ORIGINS=https://sifrah.vercel.app,https://sifrah-admin.vercel.app
+# Lo lee config/config-heroku.js (por defecto '*')
+# CORS_ORIGIN=
 
 # ===================================
 # EJEMPLO DE CONFIGURACIÓN REAL:
